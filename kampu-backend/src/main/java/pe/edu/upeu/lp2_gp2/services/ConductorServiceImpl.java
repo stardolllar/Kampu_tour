@@ -78,6 +78,10 @@ public class ConductorServiceImpl implements IConductorService {
     private void copiar(ConductorRequestDTO dto, Conductor c, Long id) {
         if (!empresaRepository.existsById(dto.empresaId())) throw new BusinessException("La empresa seleccionada no existe.");
         if (!Reglas.telefonoValido(dto.telefono())) throw new BusinessException(Reglas.MSG_TELEFONO);
+        if (dto.telefono() != null && !dto.telefono().isBlank()
+                && conductorRepository.contarTelefono(Reglas.digitos(dto.telefono()), Reglas.idOMenosUno(id)) > 0) {
+            throw new DuplicateResourceException("El teléfono " + dto.telefono().trim() + " ya está registrado para otro conductor.");
+        }
         String licencia = dto.numeroLicencia().trim().toUpperCase();
         Optional<Conductor> mismo = conductorRepository.findByNumeroLicenciaIgnoreCase(licencia);
         if (mismo.isPresent() && !mismo.get().getConductorId().equals(id)) {

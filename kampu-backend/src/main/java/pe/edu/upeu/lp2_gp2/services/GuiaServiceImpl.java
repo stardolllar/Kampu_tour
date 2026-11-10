@@ -7,6 +7,7 @@ import pe.edu.upeu.lp2_gp2.dto.GuiaRequestDTO;
 import pe.edu.upeu.lp2_gp2.dto.Reglas;
 import pe.edu.upeu.lp2_gp2.entity.Guia;
 import pe.edu.upeu.lp2_gp2.exception.BusinessException;
+import pe.edu.upeu.lp2_gp2.exception.DuplicateResourceException;
 import pe.edu.upeu.lp2_gp2.exception.ResourceNotFoundException;
 import pe.edu.upeu.lp2_gp2.repository.GuiaRepository;
 import pe.edu.upeu.lp2_gp2.repository.SalidaProgramadaRepository;
@@ -39,7 +40,7 @@ public class GuiaServiceImpl implements IGuiaService {
     @Transactional
     public GuiaDTO crear(GuiaRequestDTO dto) {
         Guia g = new Guia();
-        copiar(dto, g);
+        copiar(dto, g, g.getGuiaId());
         return GuiaDTO.desde(guiaRepository.save(g));
     }
 
@@ -47,7 +48,7 @@ public class GuiaServiceImpl implements IGuiaService {
     @Transactional
     public GuiaDTO actualizar(Long id, GuiaRequestDTO dto) {
         Guia g = obtener(id);
-        copiar(dto, g);
+        copiar(dto, g, g.getGuiaId());
         return GuiaDTO.desde(guiaRepository.save(g));
     }
 
@@ -64,8 +65,12 @@ public class GuiaServiceImpl implements IGuiaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Guía no encontrado con Id: " + id));
     }
 
-    private void copiar(GuiaRequestDTO dto, Guia g) {
+    private void copiar(GuiaRequestDTO dto, Guia g, Long id) {
         if (!Reglas.telefonoValido(dto.telefono())) throw new BusinessException(Reglas.MSG_TELEFONO);
+        if (dto.telefono() != null && !dto.telefono().isBlank()
+                && guiaRepository.contarTelefono(Reglas.digitos(dto.telefono()), Reglas.idOMenosUno(id)) > 0) {
+            throw new DuplicateResourceException("El teléfono " + dto.telefono().trim() + " ya está registrado para otro guía.");
+        }
         g.setNombreCompleto(dto.nombreCompleto().trim());
         g.setEspecialidad(dto.especialidad() == null || dto.especialidad().isBlank() ? null : dto.especialidad().trim());
         g.setTelefono(dto.telefono() == null || dto.telefono().isBlank() ? null : dto.telefono().trim());

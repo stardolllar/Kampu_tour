@@ -5,8 +5,9 @@ proyecto/
 ├── kampu-backend/      Backend Spring Boot 3.4 (Java 21) — API REST en http://localhost:8082/lp2_gp2
 │   └── src/main/resources/db/
 │       ├── 00_reset.sql      Solo si ya tenías una base creada: borra el esquema anterior y el v3
-│       ├── 01_schema_v3.sql  Script v3: tablas, PKG_ASIGNACION (PL/SQL), vistas y triggers
-│       └── 02_data.sql       Datos de demostración (se cargan pasando por los triggers v3)
+│       ├── 01_schema_v3.sql       Script v3: tablas, PKG_ASIGNACION (PL/SQL), vistas y triggers
+│       ├── 02_extension_kampu.sql Teléfonos/documentos únicos, rutas hacia paquetes, PKG_RUTAS (duración real)
+│       └── 03_data.sql            Datos de demostración (se cargan pasando por los triggers)
 └── kampu-frontend/     Frontend Angular 18
 ```
 
@@ -60,6 +61,24 @@ Una sola línea de `01_schema_v3.sql` cambia respecto al archivo original: en
 `INSERT INTO DOMINIO_TRANSICIONES VALUES ('ASIGNADO', 'PROGRAMADO');   -- desasignar` el comentario va ahora en su propia
 línea. En **SQL*Plus**, un comentario después del `;` hace que la sentencia se una con la siguiente y **fallan las dos**
 (se perdían las transiciones ASIGNADO → PROGRAMADO y ASIGNADO → EMBARQUE). En SQL Developer (F5) no pasaba.
+
+### Extensión (`02_extension_kampu.sql`)
+
+| Regla / función | Cómo se aplica |
+|---|---|
+| **Teléfonos sin repetir** en clientes, guías, conductores y empresas | Índices únicos `uq_cli_telefono`, `uq_guia_telefono`, `uq_cond_telefono`, `uq_emp_telefono` sobre los dígitos (`TRANSLATE(telefono, '0+-() ', '0')`): `+51 987 654 321` = `+51987654321`. El backend y los formularios avisan antes. |
+| **Documento del cliente sin repetir** (DNI, CE, pasaporte o RUC) | Índice único `uq_cli_numero_doc` sobre `UPPER(numero_documento)`, sin importar el tipo. |
+| **Un pasajero no se repite en la misma salida** | Trigger `trg_pasajeros_doc_salida` (reservas activas; en otra salida sí puede viajar). |
+| **Rutas hacia un paquete** | `RUTAS_PROVEEDOR.paquete_id` y `PAQUETES_TOUR.lugar_destino_id`. En *Logística → Rutas*, el destino puede ser un **paquete**: el destino es el lugar del paquete (`trg_ruta_biu`) y al crear la ruta **se crea automáticamente su salida programada** (fecha, cupos y guía en el mismo formulario). |
+| **Duración real de la ruta** | `LUGARES.latitud/longitud` (coordenadas reales). Al dejar la duración vacía o pulsar *Calcular*, el backend consulta **OSRM** (red vial de OpenStreetMap, `GET /rutas/estimar-duracion`); sin internet usa `PKG_RUTAS.duracion_estimada_min` (distancia haversine calibrada con tiempos reales). Si faltan coordenadas, `trg_ruta_biu` pide indicarla a mano. |
+
+- OSRM se configura en `application.yaml` (`OSRM_URL`, `OSRM_HABILITADO`). El servidor público es para pruebas; en
+  producción conviene uno propio.
+- La estimación sin internet es aproximada (±20 % en la mayoría de rutas de prueba; en carreteras costeras rectas,
+  como Paracas → Huacachina, sobreestima). Ajusta las constantes de `PKG_RUTAS` o escribe la duración a mano.
+- **Base v3 que ya tiene datos:** ejecuta solo `02_extension_kampu.sql` (no borra nada). Antes revisa las consultas de su
+  sección 0: si hay teléfonos o documentos repetidos, la creación del índice falla hasta corregirlos. Luego registra las
+  coordenadas de tus lugares (Logística → Lugares) y el lugar de destino de cada paquete.
 
 ### Pantallas nuevas o cambiadas (frontend)
 
@@ -120,18 +139,21 @@ Las mismas reglas se aplican en ambos lados: `kampu-frontend/src/app/core/utils/
       (tablas `TRANSPORTE`/`CHOFERES`) o una instalación previa de la v3. **Borra todos los datos.**
    2. `kampu-backend/src/main/resources/db/01_schema_v3.sql` — tablas, índices, `PKG_ASIGNACION`, vistas y triggers.
       Al final lista los objetos: todos deben salir `VALID`.
-   3. `kampu-backend/src/main/resources/db/02_data.sql` (opcional) — datos demo: 4 empresas, 13 lugares, 11 rutas,
-      8 vehículos, 7 conductores, 9 salidas, 8 reservas y 9 operaciones de transporte con su historial.
+   3. `kampu-backend/src/main/resources/db/02_extension_kampu.sql` — unicidad de teléfonos y documentos, rutas hacia
+      paquetes, coordenadas y `PKG_RUTAS`.
+   4. `kampu-backend/src/main/resources/db/03_data.sql` (opcional) — datos demo: 4 empresas, 14 lugares con coordenadas
+      reales, 11 rutas (5 hacia paquetes) con duraciones reales, 8 vehículos, 7 conductores, 9 salidas, 8 reservas y
+      9 operaciones de transporte con su historial.
 
    En SQL Developer usa **"Ejecutar script" (F5)**, no "Ejecutar sentencia" (el paquete y los triggers terminan en `/`).
    En SQL*Plus, para que las tildes se guarden bien: `set NLS_LANG=AMERICAN_AMERICA.AL32UTF8` antes de entrar.
-3. Si no cargas `02_data.sql`, al iniciar el backend se crean solos los usuarios `admin` (ADMIN), `ventas` (VENDEDOR)
+3. Si no cargas `03_data.sql`, al iniciar el backend se crean solos los usuarios `admin` (ADMIN), `ventas` (VENDEDOR)
    y `operador` (OPERADOR) si la tabla está vacía.
 
-> Ya no hay scripts de migración: la v3 cambia la estructura de reservas y transporte, así que se reinstala con
-> `00_reset.sql` → `01_schema_v3.sql` → `02_data.sql`. Si necesitas conservar datos reales, expórtalos antes.
+> Desde la versión anterior (con `TRANSPORTE`/`CHOFERES`) se reinstala con
+> `00_reset.sql` → `01_schema_v3.sql` → `02_extension_kampu.sql` → `03_data.sql`. Si necesitas conservar datos reales, expórtalos antes.
 
-> `02_data.sql` usa IDs fijos (para que coincidan las relaciones) y al final reinicia las identidades con
+> `03_data.sql` usa IDs fijos (para que coincidan las relaciones) y al final reinicia las identidades con
 > `ALTER TABLE ... MODIFY ... (START WITH LIMIT VALUE)`, para que los registros nuevos continúen desde el último ID.
 > Las fechas de la demo son de octubre a diciembre de 2026: si ya pasaron, crea salidas nuevas para reservar.
 
@@ -197,8 +219,8 @@ Errores: `{ "status": 400, "error": "mensaje", "timestamp": ... }`
 | Paquetes | `GET/POST /paquetes` · `GET/PUT/DELETE /paquetes/{id}` · `POST /paquetes/imagen` (multipart `file`) → `{imagen}` |
 | Guías | `GET/POST /guias` · `GET/PUT/DELETE /guias/{id}` |
 | Empresas de transporte | `GET/POST /empresas` · `GET/PUT/DELETE /empresas/{id}` (incluye `totalVehiculos`, `capacidadTotalTransporte`, `conductoresDisponibles` de `VW_EMPRESA_CAPACIDAD`) |
-| Lugares | `GET/POST /lugares` · `GET/PUT/DELETE /lugares/{id}` |
-| Rutas | `GET/POST /rutas` · `GET/PUT/DELETE /rutas/{id}` |
+| Lugares | `GET/POST /lugares` · `GET/PUT/DELETE /lugares/{id}` (con `latitud`/`longitud`) |
+| Rutas | `GET/POST /rutas` · `GET/PUT/DELETE /rutas/{id}` · `GET /rutas/estimar-duracion?origenId=&destinoId=&tipoServicio=`. Con `paqueteId`, el POST pide `fechaSalida`, `cuposSalida` (y `guiaSalidaId` opcional), crea la salida y devuelve `salidaCreadaId`. `duracionEstimadaMin` vacía = se calcula. |
 | Vehículos | `GET/POST /vehiculos` · `GET/PUT/DELETE /vehiculos/{id}` |
 | Conductores | `GET/POST /conductores` · `GET/PUT/DELETE /conductores/{id}` |
 | Operaciones (tráfico) | `GET /operaciones[?salidaId=]` · `GET /operaciones/estados` (estados y transiciones) · `GET/POST /operaciones` · `GET/PUT /operaciones/{id}` · `PATCH /operaciones/{id}/estado` `{estado, observacion}` · `POST /operaciones/{id}/asignar-automatico` · `PATCH /operaciones/{id}/asignar` `{vehiculoId, conductorId}` · `GET /operaciones/{id}/candidatos` · `GET /operaciones/{id}/recursos-disponibles` · `GET /operaciones/{id}/historial`. Encabezado opcional `X-Usuario`. |

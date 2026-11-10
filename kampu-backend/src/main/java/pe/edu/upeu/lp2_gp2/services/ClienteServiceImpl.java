@@ -90,10 +90,16 @@ public class ClienteServiceImpl implements IClienteService {
         String errorTelefono = Reglas.errorTelefonoPais(dto.telefono());
         if (errorTelefono != null) throw new BusinessException(errorTelefono);
         String documento = dto.numeroDocumento().trim().toUpperCase();
-        // uq_cli_tipo_doc: el documento es único por tipo
-        Optional<Cliente> existente = clienteRepository.findByTipoDocumentoAndNumeroDocumentoIgnoreCase(dto.tipoDocumento(), documento);
+        // uq_cli_numero_doc: el número de documento no se repite (sin importar el tipo)
+        Optional<Cliente> existente = clienteRepository.findFirstByNumeroDocumentoIgnoreCase(documento);
         if (existente.isPresent() && !existente.get().getClienteId().equals(id)) {
-            throw new DuplicateResourceException("Ya existe un cliente con ese tipo y número de documento.");
+            Cliente otro = existente.get();
+            throw new DuplicateResourceException("El documento " + documento + " ya está registrado para "
+                    + otro.getNombreCompleto() + " (" + otro.getTipoDocumento() + ").");
+        }
+        // uq_cli_telefono: el teléfono no se repite
+        if (clienteRepository.contarTelefono(Reglas.digitos(dto.telefono()), Reglas.idOMenosUno(id)) > 0) {
+            throw new DuplicateResourceException("El teléfono " + dto.telefono().trim() + " ya está registrado para otro cliente.");
         }
         c.setNombreCompleto(dto.nombreCompleto().trim());
         c.setTipoDocumento(dto.tipoDocumento());

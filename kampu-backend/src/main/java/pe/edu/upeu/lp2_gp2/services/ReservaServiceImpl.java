@@ -102,6 +102,14 @@ public class ReservaServiceImpl implements IReservaService {
             }
         }
 
+        // Un pasajero no viaja dos veces en la misma salida (trg_pasajeros_doc_salida)
+        for (PasajeroRequestDTO p : dto.pasajeros()) {
+            if (pasajeroRepository.contarEnSalida(salida.getSalidaId(), p.tipoDocumento(), p.numeroDocumento().trim()) > 0) {
+                throw new BusinessException("El pasajero " + p.nombreCompleto().trim() + " (" + p.tipoDocumento() + " "
+                        + p.numeroDocumento().trim() + ") ya tiene una reserva activa en esta salida.");
+            }
+        }
+
         // 1) Cabecera (monto_total empieza en 0)
         Reserva r = new Reserva();
         r.setClienteId(dto.clienteId());

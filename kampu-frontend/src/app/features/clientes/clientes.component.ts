@@ -5,7 +5,7 @@ import { AlertService } from '../../core/services/alert.service';
 import { ClienteForm, TipoDocumentoCliente } from '../../core/models';
 import { IconComponent } from '../../shared/icon.component';
 import { filtrarEscritura, filtrarPegado } from '../../core/utils/filtro';
-import { FormValidacion, V } from '../../core/utils/validacion';
+import { FormValidacion, telefonoRepetido, V } from '../../core/utils/validacion';
 import { ModalComponent } from '../../shared/modal.component';
 import { TelefonoInputComponent } from '../../shared/telefono-input.component';
 import { errorTelefonoPais } from '../../core/utils/paises';
@@ -31,10 +31,19 @@ export class ClientesComponent {
     nombre: this.form.tipoDocumento === 'RUC'
       ? V.texto(this.form.nombreCompleto, 'La razón social', 150, true)
       : V.nombrePersona(this.form.nombreCompleto),
-    documento: V.documento(this.form.tipoDocumento, this.form.numeroDocumento),
+    documento: V.documento(this.form.tipoDocumento, this.form.numeroDocumento) ?? this.documentoRepetido(),
     email: this.form.email.trim() ? V.email(this.form.email) : 'El correo es obligatorio.',
     telefono: errorTelefonoPais(this.form.telefono)
+      ?? (telefonoRepetido(this.form.telefono, this.store.clientes(), c => c.telefono, c => c.clienteId === this.editId)
+        ? 'Ese teléfono ya está registrado para otro cliente.' : null)
   }));
+
+  // El número de documento no se repite entre clientes (sin importar el tipo)
+  private documentoRepetido(): string | null {
+    const n = this.form.numeroDocumento.trim().toUpperCase();
+    const otro = this.store.clientes().find(c => c.clienteId !== this.editId && c.numeroDocumento.toUpperCase() === n);
+    return otro ? `Ese documento ya está registrado para ${otro.nombreCompleto} (${otro.tipoDocumento}).` : null;
+  }
 
   private vacio(): ClienteForm {
     return { nombreCompleto: '', tipoDocumento: 'DNI' as TipoDocumentoCliente, numeroDocumento: '', email: '', telefono: '' };

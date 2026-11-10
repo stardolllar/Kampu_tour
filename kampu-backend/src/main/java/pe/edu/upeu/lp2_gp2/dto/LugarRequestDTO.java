@@ -1,9 +1,8 @@
 package pe.edu.upeu.lp2_gp2.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
+
+import java.math.BigDecimal;
 
 public record LugarRequestDTO(
         @NotBlank(message = "El nombre del lugar es obligatorio.")
@@ -16,6 +15,15 @@ public record LugarRequestDTO(
         @NotBlank(message = "La ciudad es obligatoria.")
         @Size(max = 100, message = "La ciudad admite máximo 100 caracteres.")
         @Pattern(regexp = Reglas.TEXTO, message = "La ciudad contiene caracteres no permitidos.")
-        String ciudad
+        String ciudad,
+        // Coordenadas reales (opcionales, van juntas): con ellas se calcula la duración de las rutas
+        @DecimalMin(value = "-90", message = "La latitud debe estar entre -90 y 90.")
+        @DecimalMax(value = "90", message = "La latitud debe estar entre -90 y 90.")
+        @Digits(integer = 3, fraction = 6, message = "La latitud admite hasta 6 decimales.")
+        BigDecimal latitud,
+        @DecimalMin(value = "-180", message = "La longitud debe estar entre -180 y 180.")
+        @DecimalMax(value = "180", message = "La longitud debe estar entre -180 y 180.")
+        @Digits(integer = 3, fraction = 6, message = "La longitud admite hasta 6 decimales.")
+        BigDecimal longitud
 ) {
 }

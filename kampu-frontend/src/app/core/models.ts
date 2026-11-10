@@ -39,6 +39,8 @@ export interface PaqueteTour {
   noches: number;
   imagen: string;
   estado: EstadoRegistro;
+  // Lugar al que llega el paquete (02_extension_kampu.sql)
+  lugarDestinoId: number | null;
 }
 
 export interface Guia {
@@ -71,6 +73,9 @@ export interface Lugar {
   nombre: string;
   tipoLugar: TipoLugar;
   ciudad: string;
+  // Coordenadas reales: con ellas se calcula la duración de las rutas
+  latitud: number | null;
+  longitud: number | null;
 }
 
 export interface RutaProveedor {
@@ -78,10 +83,22 @@ export interface RutaProveedor {
   empresaId: number;
   origenId: number;
   destinoId: number;
+  // Ruta hacia un paquete (su destino es el lugar del paquete)
+  paqueteId: number | null;
   tipoServicio: TipoServicio;
   duracionEstimadaMin: number;
   tarifaReferencial: number | null;
   estado: EstadoRuta;
+  // Salida creada automáticamente al registrar una ruta hacia un paquete
+  salidaCreadaId: number | null;
+}
+
+// Duración calculada con datos reales: OSRM (OpenStreetMap) o ESTIMADO (PKG_RUTAS con coordenadas)
+export interface EstimacionDuracion {
+  minutos: number | null;
+  distanciaKm: number | null;
+  fuente: 'OSRM' | 'ESTIMADO' | 'SIN_COORDENADAS';
+  detalle: string;
 }
 
 export interface Vehiculo {
@@ -253,6 +270,7 @@ export interface PaqueteForm {
   noches: number;
   imagen: string;
   estado: EstadoRegistro;
+  lugarDestinoId: number | null;
 }
 
 export interface GuiaForm {
@@ -277,16 +295,23 @@ export interface LugarForm {
   nombre: string;
   tipoLugar: TipoLugar;
   ciudad: string;
+  latitud: number | null;
+  longitud: number | null;
 }
 
 export interface RutaForm {
   empresaId: number | null;
   origenId: number | null;
+  // Destino: un lugar, o un paquete (se crea su salida programada)
   destinoId: number | null;
+  paqueteId: number | null;
   tipoServicio: TipoServicio;
-  duracionEstimadaMin: number | null;
+  duracionEstimadaMin: number | null;   // vacía: se calcula con datos reales
   tarifaReferencial: number | null;
   estado: EstadoRuta;
+  fechaSalida: string | null;
+  cuposSalida: number | null;
+  guiaSalidaId: number | null;
 }
 
 export interface VehiculoForm {

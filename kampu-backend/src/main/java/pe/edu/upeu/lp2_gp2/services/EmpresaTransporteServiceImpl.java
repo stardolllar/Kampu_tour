@@ -99,6 +99,9 @@ public class EmpresaTransporteServiceImpl implements IEmpresaTransporteService {
 
     private void copiar(EmpresaTransporteRequestDTO dto, EmpresaTransporte e, Long id) {
         if (!Reglas.telefonoValido(dto.contactoTelefono())) throw new BusinessException(Reglas.MSG_TELEFONO);
+        if (empresaRepository.contarTelefono(Reglas.digitos(dto.contactoTelefono()), Reglas.idOMenosUno(id)) > 0) {
+            throw new DuplicateResourceException("El teléfono " + dto.contactoTelefono().trim() + " ya está registrado para otra empresa.");
+        }
         String ruc = dto.ruc().trim();
         Optional<EmpresaTransporte> misma = empresaRepository.findByRuc(ruc);
         if (misma.isPresent() && !misma.get().getEmpresaId().equals(id)) {

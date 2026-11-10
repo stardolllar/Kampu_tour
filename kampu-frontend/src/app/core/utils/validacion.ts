@@ -105,6 +105,17 @@ export const V = {
   }
 };
 
+// Solo los dígitos de un teléfono: así se compara si está repetido (igual que el backend)
+export function digitos(telefono?: string | null): string {
+  return (telefono ?? '').replace(/\D/g, '');
+}
+
+export function telefonoRepetido<T>(telefono: string, lista: T[], obtener: (x: T) => string | null | undefined,
+                                    esMismo: (x: T) => boolean): boolean {
+  const d = digitos(telefono);
+  return !!d && lista.some(x => !esMismo(x) && digitos(obtener(x)) === d);
+}
+
 export interface Errores {
   [campo: string]: string | null | undefined;
 }

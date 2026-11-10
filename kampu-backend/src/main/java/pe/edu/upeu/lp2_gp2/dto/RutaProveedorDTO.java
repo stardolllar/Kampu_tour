@@ -9,13 +9,20 @@ public record RutaProveedorDTO(
         Long empresaId,
         Long origenId,
         Long destinoId,
+        Long paqueteId,
         String tipoServicio,
         Integer duracionEstimadaMin,
         BigDecimal tarifaReferencial,
-        String estado
+        String estado,
+        // Salida programada creada automáticamente junto con la ruta (solo al crear una ruta hacia un paquete)
+        Long salidaCreadaId
 ) {
     public static RutaProveedorDTO desde(RutaProveedor r) {
-        return new RutaProveedorDTO(r.getRutaId(), r.getEmpresaId(), r.getOrigenId(), r.getDestinoId(), r.getTipoServicio(),
-                r.getDuracionEstimadaMin(), r.getTarifaReferencial(), r.getEstado());
+        return desde(r, null);
+    }
+
+    public static RutaProveedorDTO desde(RutaProveedor r, Long salidaCreadaId) {
+        return new RutaProveedorDTO(r.getRutaId(), r.getEmpresaId(), r.getOrigenId(), r.getDestinoId(), r.getPaqueteId(),
+                r.getTipoServicio(), r.getDuracionEstimadaMin(), r.getTarifaReferencial(), r.getEstado(), salidaCreadaId);
     }
 }

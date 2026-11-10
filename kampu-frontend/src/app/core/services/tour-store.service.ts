@@ -3,7 +3,7 @@ import { inject, Injectable, signal, WritableSignal } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
   Cliente, ClienteForm, Conductor, ConductorForm, ContactoReserva, EmpresaForm, EmpresaTransporte, EstadoOperacion,
-  EstadoOperacionInfo, EstadoTransaccion, Guia, GuiaForm, HistorialOperacion, Lugar, LugarForm, Moneda, Operacion,
+  EstadoOperacionInfo, EstadoTransaccion, EstimacionDuracion, Guia, GuiaForm, HistorialOperacion, Lugar, LugarForm, Moneda, Operacion,
   OperacionForm, PaqueteForm, PaqueteTour, Pago, PasajeroDraft, PasajeroReserva, RecursoCandidato, Reserva,
   RutaForm, RutaProveedor, SalidaForm, SalidaProgramada, Sesion, Vehiculo, VehiculoForm
 } from '../models';
@@ -240,6 +240,11 @@ export class TourStore {
   eliminarLugar(id: number) { return this.http.delete<void>(`${API}/lugares/${id}`); }
   guardarRuta(d: RutaForm, id: number | null) { return this.guardarEn<RutaProveedor>('rutas', d, id); }
   eliminarRuta(id: number) { return this.http.delete<void>(`${API}/rutas/${id}`); }
+  // Duración con datos reales (OSRM / PKG_RUTAS)
+  estimarDuracion(origenId: number, destinoId: number, tipoServicio: string): Observable<EstimacionDuracion> {
+    return this.http.get<EstimacionDuracion>(`${API}/rutas/estimar-duracion`,
+      { params: { origenId: origenId, destinoId: destinoId, tipoServicio: tipoServicio } });
+  }
   guardarVehiculo(d: VehiculoForm, id: number | null) { return this.guardarEn<Vehiculo>('vehiculos', d, id); }
   eliminarVehiculo(id: number) { return this.http.delete<void>(`${API}/vehiculos/${id}`); }
   guardarConductor(d: ConductorForm, id: number | null) { return this.guardarEn<Conductor>('conductores', d, id); }

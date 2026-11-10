@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import pe.edu.upeu.lp2_gp2.dto.RutaProveedorDTO;
 import pe.edu.upeu.lp2_gp2.dto.RutaProveedorRequestDTO;
+import pe.edu.upeu.lp2_gp2.dto.EstimacionDuracionDTO;
+import pe.edu.upeu.lp2_gp2.services.DuracionRutaService;
 import pe.edu.upeu.lp2_gp2.services.IRutaProveedorService;
 
 import java.util.List;
@@ -14,14 +16,23 @@ import java.util.List;
 @RequestMapping("/api/v1/rutas")
 public class RutaProveedorController {
     private final IRutaProveedorService rutaService;
+    private final DuracionRutaService duracionService;
 
-    public RutaProveedorController(IRutaProveedorService rutaService) {
+    public RutaProveedorController(IRutaProveedorService rutaService, DuracionRutaService duracionService) {
         this.rutaService = rutaService;
+        this.duracionService = duracionService;
     }
 
     @GetMapping
     public ResponseEntity<List<RutaProveedorDTO>> listar() {
         return ResponseEntity.ok(rutaService.listarTodo());
+    }
+
+    // Duración con datos reales: OSRM (OpenStreetMap) o PKG_RUTAS con las coordenadas de los lugares
+    @GetMapping("/estimar-duracion")
+    public ResponseEntity<EstimacionDuracionDTO> estimarDuracion(@RequestParam Long origenId, @RequestParam Long destinoId,
+                                                                 @RequestParam(defaultValue = "TRASLADO") String tipoServicio) {
+        return ResponseEntity.ok(duracionService.estimar(origenId, destinoId, tipoServicio));
     }
 
     @GetMapping("/{id}")

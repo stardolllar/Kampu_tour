@@ -3,7 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import {
-  CategoriaLicencia, ConductorForm, DisponibilidadOperativa, EmpresaForm, EstadoAfiliacion, EstadoConductor,
+  CategoriaLicencia, ConductorForm, EstimacionDuracion, DisponibilidadOperativa, EmpresaForm, EstadoAfiliacion, EstadoConductor,
   EstadoOperativo, EstadoRuta, GuiaForm, Lugar, LugarForm, RutaForm, TipoLugar, TipoServicio, TipoVehiculo, VehiculoForm
 } from '../../core/models';
 import { TourStore } from '../../core/services/tour-store.service';
@@ -11,7 +11,7 @@ import { AlertService } from '../../core/services/alert.service';
 import { IconComponent } from '../../shared/icon.component';
 import { BadgeComponent } from '../../shared/badge.component';
 import { filtrarEscritura, filtrarPegado, sinRueda } from '../../core/utils/filtro';
-import { FormValidacion, V } from '../../core/utils/validacion';
+import { FormValidacion, telefonoRepetido, V } from '../../core/utils/validacion';
 import { duracion, etiqueta } from '../../core/utils/etiquetas';
 import { addDays, hoy } from '../../core/utils/date.util';
 import { ModalComponent } from '../../shared/modal.component';
@@ -69,12 +69,17 @@ export class RecursosComponent {
         gNombre: V.nombrePersona(this.guia.nombreCompleto),
         gEspecialidad: V.texto(this.guia.especialidad, 'La especialidad', 100),
         gTelefono: V.telefono(this.guia.telefono)
+          ?? (telefonoRepetido(this.guia.telefono, this.store.guias(), g => g.telefono, g => g.guiaId === this.editId)
+            ? 'Ese teléfono ya está registrado para otro guía.' : null)
       };
       case 'empresas': return {
         eNombre: V.texto(this.empresa.nombreComercial, 'El nombre comercial', 150, true),
         eRuc: V.ruc(this.empresa.ruc),
         eContacto: this.empresa.contactoNombre.trim() ? V.nombrePersona(this.empresa.contactoNombre, 'El nombre del contacto') : null,
-        eTelefono: this.empresa.contactoTelefono.trim() ? V.telefono(this.empresa.contactoTelefono) : 'El teléfono de contacto es obligatorio.',
+        eTelefono: !this.empresa.contactoTelefono.trim() ? 'El teléfono de contacto es obligatorio.'
+          : V.telefono(this.empresa.contactoTelefono)
+            ?? (telefonoRepetido(this.empresa.contactoTelefono, this.store.empresas(), e => e.contactoTelefono, e => e.empresaId === this.editId)
+              ? 'Ese teléfono ya está registrado para otra empresa.' : null),
         eEmail: V.email(this.empresa.contactoEmail),
         eDireccion: V.texto(this.empresa.direccion, 'La dirección', 250)
       };
@@ -94,19 +99,34 @@ export class RecursosComponent {
             : (/^[A-Za-z0-9]{6,20}$/.test(lic) ? null : 'La licencia solo admite letras y números (6 a 20 caracteres).'),
           cVencimiento: V.fecha(this.conductor.fechaVencLicencia, 'La fecha de vencimiento'),
           cTelefono: V.telefono(this.conductor.telefono)
+            ?? (telefonoRepetido(this.conductor.telefono, this.store.conductores(), c => c.telefono, c => c.conductorId === this.editId)
+              ? 'Ese teléfono ya está registrado para otro conductor.' : null)
         };
       }
-      case 'lugares': return {
-        lNombre: V.texto(this.lugar.nombre, 'El nombre', 150, true),
-        lCiudad: V.texto(this.lugar.ciudad, 'La ciudad', 100, true)
-      };
+      case 'lugares': {
+        const l = this.lugar;
+        const vacioLat = l.latitud === null || (l.latitud as unknown) === '';
+        const vacioLon = l.longitud === null || (l.longitud as unknown) === '';
+        return {
+          lNombre: V.texto(l.nombre, 'El nombre', 150, true),
+          lCiudad: V.texto(l.ciudad, 'La ciudad', 100, true),
+          lLatitud: vacioLat ? (vacioLon ? null : 'Indica también la latitud.') : (l.latitud! < -90 || l.latitud! > 90 ? 'La latitud va de -90 a 90.' : null),
+          lLongitud: vacioLon ? (vacioLat ? null : 'Indica también la longitud.') : (l.longitud! < -180 || l.longitud! > 180 ? 'La longitud va de -180 a 180.' : null)
+        };
+      }
       case 'rutas': {
         const r = this.ruta;
         return {
           rEmpresa: r.empresaId ? null : 'Selecciona la empresa.',
           rOrigen: r.origenId ? null : 'Selecciona el origen.',
-          rDestino: !r.destinoId ? 'Selecciona el destino.' : (r.destinoId === r.origenId ? 'El destino debe ser distinto del origen.' : null),
-          rDuracion: V.entero(r.duracionEstimadaMin, 'La duración', 1, 9999),
+          rDestino: !this.destinoSel ? 'Selecciona el destino (un lugar o un paquete).' : null,
+          rLugarPaquete: r.paqueteId && !r.destinoId ? 'Indica a qué lugar llega el paquete.'
+            : (r.destinoId && r.destinoId === r.origenId ? 'El destino debe ser distinto del origen.' : null),
+          rDuracion: r.duracionEstimadaMin === null || (r.duracionEstimadaMin as unknown) === '' ? null
+            : V.entero(r.duracionEstimadaMin, 'La duración', 1, 9999),
+          rFecha: this.creaSalida ? (V.fecha(r.fechaSalida ?? '', 'La fecha de la salida')
+            ?? ((r.fechaSalida ?? '') < hoy() ? 'La fecha de la salida no puede ser pasada.' : null)) : null,
+          rCupos: this.creaSalida ? V.entero(r.cuposSalida, 'Los cupos', 1, 999) : null,
           rTarifa: r.tarifaReferencial === null || (r.tarifaReferencial as unknown) === '' ? null
             : (r.tarifaReferencial < 0 ? 'La tarifa no puede ser negativa.' : null)
         };
@@ -138,6 +158,10 @@ export class RecursosComponent {
     return grupos;
   });
 
+  private paqueteNombre(salidaId: number): string {
+    return this.store.getPaquete(this.ruta.paqueteId)?.nombre ?? 'salida ' + salidaId;
+  }
+
   nombreEmpresa(id?: number | null) { return this.store.getEmpresa(id)?.nombreComercial ?? '—'; }
   vehiculosDe(empresaId: number) { return this.store.vehiculos().filter(v => v.empresaId === empresaId).length; }
   rutasDe(empresaId: number) { return this.store.rutas().filter(r => r.empresaId === empresaId).length; }
@@ -159,10 +183,59 @@ export class RecursosComponent {
     return { empresaId: this.filtroEmpresa(), nombres: '', numeroLicencia: '', categoriaLicencia: 'A-IIb',
       fechaVencLicencia: addDays(hoy(), 365), telefono: '', estadoDisponibilidad: 'DISPONIBLE' };
   }
-  private lugarVacio(): LugarForm { return { nombre: '', tipoLugar: 'HOTEL', ciudad: '' }; }
+  private lugarVacio(): LugarForm { return { nombre: '', tipoLugar: 'HOTEL', ciudad: '', latitud: null, longitud: null }; }
   private rutaVacia(): RutaForm {
-    return { empresaId: this.filtroEmpresa(), origenId: null, destinoId: null, tipoServicio: 'TRASLADO',
-      duracionEstimadaMin: 30, tarifaReferencial: null, estado: 'ACTIVA' };
+    return { empresaId: this.filtroEmpresa(), origenId: null, destinoId: null, paqueteId: null, tipoServicio: 'TRASLADO',
+      duracionEstimadaMin: null, tarifaReferencial: null, estado: 'ACTIVA',
+      fechaSalida: addDays(hoy(), 14), cuposSalida: 15, guiaSalidaId: null };
+  }
+
+  // ---------- Rutas: destino (lugar o paquete), salida automática y duración real ----------
+  destinoSel = '';              // 'L:<lugarId>' o 'P:<paqueteId>'
+  estimacion = signal<EstimacionDuracion | null>(null);
+  calculando = signal(false);
+  private duracionManual = false;
+
+  paquetesDestino = computed(() => this.store.paquetes()
+    .filter(p => p.estado === 'ACTIVO' || p.paqueteId === this.ruta.paqueteId));
+  get paqueteRuta() { return this.store.getPaquete(this.ruta.paqueteId); }
+  // Con paquete, al crear la ruta se crea también su salida programada
+  get creaSalida() { return !this.editId && !!this.ruta.paqueteId; }
+
+  cambioDestino() {
+    const [tipo, id] = this.destinoSel.split(':');
+    if (tipo === 'P') {
+      this.ruta.paqueteId = Number(id);
+      this.ruta.destinoId = this.store.getPaquete(Number(id))?.lugarDestinoId ?? null;
+      if (!this.editId && this.ruta.tipoServicio === 'TRASLADO') this.ruta.tipoServicio = 'TOUR';
+    } else {
+      this.ruta.paqueteId = null;
+      this.ruta.destinoId = id ? Number(id) : null;
+    }
+    this.recalcularSiAuto();
+  }
+
+  duracionEditada() { this.duracionManual = true; this.estimacion.set(null); }
+
+  recalcularSiAuto() {
+    if (!this.duracionManual) this.calcularDuracion(false);
+  }
+
+  calcularDuracion(avisar = true) {
+    const r = this.ruta;
+    if (!r.origenId || !r.destinoId || r.origenId === r.destinoId) {
+      if (avisar) this.alerts.toast('Elige el origen y el destino primero', 'info');
+      return;
+    }
+    this.calculando.set(true);
+    this.store.estimarDuracion(r.origenId, r.destinoId, r.tipoServicio).subscribe({
+      next: e => {
+        this.calculando.set(false);
+        this.estimacion.set(e);
+        if (e.minutos) { this.ruta.duracionEstimadaMin = e.minutos; this.duracionManual = false; }
+      },
+      error: err => { this.calculando.set(false); if (avisar) this.alerts.error(this.store.error(err)); }
+    });
   }
 
   nuevo() {
@@ -173,6 +246,9 @@ export class RecursosComponent {
     this.conductor = this.conductorVacio();
     this.lugar = this.lugarVacio();
     this.ruta = this.rutaVacia();
+    this.destinoSel = '';
+    this.duracionManual = false;
+    this.estimacion.set(null);
     this.abrir();
   }
 
@@ -215,16 +291,20 @@ export class RecursosComponent {
   editarLugar(id: number) {
     const l = this.store.getLugar(id)!;
     this.editId = id;
-    this.lugar = { nombre: l.nombre, tipoLugar: l.tipoLugar, ciudad: l.ciudad };
+    this.lugar = { nombre: l.nombre, tipoLugar: l.tipoLugar, ciudad: l.ciudad, latitud: l.latitud, longitud: l.longitud };
     this.abrir();
   }
   editarRuta(id: number) {
     const r = this.store.rutas().find(x => x.rutaId === id)!;
     this.editId = id;
     this.ruta = {
-      empresaId: r.empresaId, origenId: r.origenId, destinoId: r.destinoId, tipoServicio: r.tipoServicio,
-      duracionEstimadaMin: r.duracionEstimadaMin, tarifaReferencial: r.tarifaReferencial, estado: r.estado
+      empresaId: r.empresaId, origenId: r.origenId, destinoId: r.destinoId, paqueteId: r.paqueteId, tipoServicio: r.tipoServicio,
+      duracionEstimadaMin: r.duracionEstimadaMin, tarifaReferencial: r.tarifaReferencial, estado: r.estado,
+      fechaSalida: null, cuposSalida: null, guiaSalidaId: null
     };
+    this.destinoSel = r.paqueteId ? 'P:' + r.paqueteId : 'L:' + r.destinoId;
+    this.duracionManual = true;   // conserva la duración guardada; "Calcular" la recalcula
+    this.estimacion.set(null);
     this.abrir();
   }
 
@@ -257,22 +337,29 @@ export class RecursosComponent {
           telefono: t(c.telefono) }, this.editId);
         break;
       }
-      case 'lugares':
-        peticion = this.store.guardarLugar({ ...this.lugar, nombre: t(this.lugar.nombre), ciudad: t(this.lugar.ciudad) }, this.editId);
+      case 'lugares': {
+        const l = this.lugar;
+        const num = (x: number | null) => x === null || (x as unknown) === '' ? null : x;
+        peticion = this.store.guardarLugar({ ...l, nombre: t(l.nombre), ciudad: t(l.ciudad), latitud: num(l.latitud), longitud: num(l.longitud) }, this.editId);
         break;
+      }
       default: {
         const r = this.ruta;
-        const tarifa = r.tarifaReferencial === null || (r.tarifaReferencial as unknown) === '' ? null : r.tarifaReferencial;
-        peticion = this.store.guardarRuta({ ...r, tarifaReferencial: tarifa }, this.editId);
+        const num = (x: number | null) => x === null || (x as unknown) === '' ? null : x;
+        const datos: RutaForm = { ...r, tarifaReferencial: num(r.tarifaReferencial), duracionEstimadaMin: num(r.duracionEstimadaMin) };
+        if (!this.creaSalida) { datos.fechaSalida = null; datos.cuposSalida = null; datos.guiaSalidaId = null; }
+        peticion = this.store.guardarRuta(datos, this.editId);
       }
     }
     this.store.ocupado.set(true);
     peticion.subscribe({
-      next: () => {
+      next: (resultado) => {
         this.store.ocupado.set(false);
         this.recargar();
         this.abierto.set(false);
-        this.alerts.toast('Guardado');
+        const salida = (resultado as { salidaCreadaId?: number | null })?.salidaCreadaId;
+        if (salida) this.alerts.success(`Ruta guardada. Se creó la salida programada de ${this.paqueteNombre(salida)}.`, 'Salida creada');
+        else this.alerts.toast('Guardado');
       },
       error: (err) => {
         this.store.ocupado.set(false);
@@ -286,7 +373,7 @@ export class RecursosComponent {
     switch (this.tab()) {
       case 'guias': this.store.cargarGuias(); break;
       case 'lugares': this.store.cargarLugares(); break;
-      case 'rutas': this.store.cargarRutas(); break;
+      case 'rutas': this.store.cargarRutas(); this.store.cargarSalidas(); this.store.cargarPaquetes(); break;
       case 'vehiculos': this.store.cargarVehiculos(); this.store.cargarEmpresas(); break;
       case 'conductores': this.store.cargarConductores(); this.store.cargarEmpresas(); break;
       default: this.store.cargarEmpresas();

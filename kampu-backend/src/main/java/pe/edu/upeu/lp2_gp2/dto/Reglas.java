@@ -30,6 +30,16 @@ public final class Reglas {
 
     public static final LocalDate FECHA_MINIMA = LocalDate.of(1900, 1, 1);
 
+    // Solo los dígitos del teléfono: así se compara si está repetido
+    // (igual que TRANSLATE(telefono, '0+-() ', '0') de los índices únicos)
+    public static String digitos(String telefono) {
+        return telefono == null ? "" : telefono.replaceAll("\\D", "");
+    }
+
+    public static long idOMenosUno(Long id) {
+        return id == null ? -1L : id;
+    }
+
     public static boolean documentoValido(String tipo, String numero) {
         if (tipo == null || numero == null || numero.isBlank()) return true;
         String n = numero.trim();

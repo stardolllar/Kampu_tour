@@ -29,6 +29,15 @@ public final class ErroresOracle {
             Map.entry("UQ_DET_RESERVA_SALIDA", "La reserva ya incluye esa salida."),
             Map.entry("UQ_PAS_DETALLE_DOC", "El documento de un pasajero está repetido en la reserva."),
             Map.entry("UQ_OP_CODIGO", "El código de operación ya existe."),
+            // 02_extension_kampu.sql
+            Map.entry("UQ_CLI_TELEFONO", "Ese teléfono ya está registrado para otro cliente."),
+            Map.entry("UQ_CLI_NUMERO_DOC", "Ese número de documento ya está registrado para otro cliente."),
+            Map.entry("UQ_GUIA_TELEFONO", "Ese teléfono ya está registrado para otro guía."),
+            Map.entry("UQ_COND_TELEFONO", "Ese teléfono ya está registrado para otro conductor."),
+            Map.entry("UQ_EMP_TELEFONO", "Ese teléfono ya está registrado para otra empresa."),
+            Map.entry("CHK_LUG_COORDS", "Indica la latitud y la longitud juntas (o deja ambas vacías)."),
+            Map.entry("FK_RUTA_PAQUETE", "El paquete indicado no existe."),
+            Map.entry("FK_PAQ_LUGAR_DESTINO", "El lugar de destino indicado no existe."),
             // CHECK
             Map.entry("CHK_EMP_RUC", "El RUC tiene 11 dígitos y empieza con 10, 15, 17 o 20."),
             Map.entry("CHK_USU_ROL", "Rol no válido (ADMIN, VENDEDOR u OPERADOR)."),

@@ -1,10 +1,12 @@
 package pe.edu.upeu.lp2_gp2.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.DynamicUpdate;
 import java.math.BigDecimal;
 
 // Ruta (origen -> destino) que opera una empresa de transporte
 @Entity
+@DynamicUpdate
 @Table(name = "RUTAS_PROVEEDOR")
 public class RutaProveedor {
     @Id
@@ -24,7 +26,8 @@ public class RutaProveedor {
     @Column(name = "tipo_servicio", nullable = false, length = 20)
     private String tipoServicio;
 
-    @Column(name = "duracion_estimada_min", nullable = false)
+    // Si va nula, trg_ruta_biu la calcula con PKG_RUTAS (coordenadas de los lugares)
+    @Column(name = "duracion_estimada_min")
     private Integer duracionEstimadaMin;
 
     @Column(name = "tarifa_referencial", precision = 10, scale = 2)
@@ -32,6 +35,10 @@ public class RutaProveedor {
 
     @Column(name = "estado", nullable = false, length = 20)
     private String estado;
+
+    // Ruta hacia un paquete: su destino es el lugar del paquete (trg_ruta_biu)
+    @Column(name = "paquete_id")
+    private Long paqueteId;
 
     public RutaProveedor() {
     }
@@ -98,5 +105,13 @@ public class RutaProveedor {
 
     public void setEstado(String estado) {
         this.estado = estado;
+    }
+
+    public Long getPaqueteId() {
+        return paqueteId;
+    }
+
+    public void setPaqueteId(Long paqueteId) {
+        this.paqueteId = paqueteId;
     }
 }

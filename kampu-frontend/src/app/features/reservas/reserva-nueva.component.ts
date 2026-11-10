@@ -49,7 +49,8 @@ export class ReservaNuevaComponent implements OnInit {
       const doc = p.numeroDocumento.trim().toUpperCase();
       e['p' + i + 'nombre'] = V.nombrePersona(p.nombreCompleto, 'El nombre del pasajero');
       e['p' + i + 'documento'] = V.documento(p.tipoDocumento, p.numeroDocumento)
-        ?? (docs.has(doc) ? 'Este documento ya está en otro pasajero de la reserva.' : null);
+        ?? (docs.has(doc) ? 'Este documento ya está en otro pasajero de la reserva.' : null)
+        ?? (this.yaViaja(p.tipoDocumento, doc) ? 'Este pasajero ya tiene una reserva activa en esta salida.' : null);
       if (doc) docs.add(doc);
       e['p' + i + 'nacionalidad'] = V.nacionalidad(p.nacionalidad);
       e['p' + i + 'nacimiento'] = V.fecha(p.fechaNacimiento, 'La fecha de nacimiento', false)
@@ -72,6 +73,15 @@ export class ReservaNuevaComponent implements OnInit {
       .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
   }
   get salida() { return this.store.getSalida(this.salidaId); }
+
+  // El mismo DNI/CE/pasaporte no puede ir dos veces en la misma salida (trg_pasajeros_doc_salida)
+  private yaViaja(tipo: string, doc: string): boolean {
+    if (!this.salidaId || !doc) return false;
+    const reservas = new Set(this.store.reservas()
+      .filter(r => r.salidaId === this.salidaId && r.estadoReserva !== 'ANULADA').map(r => r.reservaId));
+    return this.store.pasajeros().some(x => reservas.has(x.reservaId) && x.tipoDocumento === tipo
+      && x.numeroDocumento.toUpperCase() === doc);
+  }
   get paquete() { return this.store.getPaquete(this.salida?.paqueteId); }
   get total() { return (this.paquete?.precioBase ?? 0) * this.pasajeros.length; }
   get excede() { return !!this.salida && this.pasajeros.length > this.salida.cuposDisponibles; }

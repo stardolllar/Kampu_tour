@@ -78,8 +78,13 @@ public class LugarServiceImpl implements ILugarService {
         if (mismo.isPresent() && !mismo.get().getLugarId().equals(id)) {
             throw new DuplicateResourceException("Ya existe el lugar " + nombre + " en " + ciudad + ".");
         }
+        if ((dto.latitud() == null) != (dto.longitud() == null)) {
+            throw new BusinessException("Indica la latitud y la longitud juntas (o deja ambas vacías).");
+        }
         l.setNombre(nombre);
         l.setTipoLugar(dto.tipoLugar());
         l.setCiudad(ciudad);
+        l.setLatitud(dto.latitud());
+        l.setLongitud(dto.longitud());
     }
 }

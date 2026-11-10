@@ -8,6 +8,7 @@ import pe.edu.upeu.lp2_gp2.dto.PaqueteTourRequestDTO;
 import pe.edu.upeu.lp2_gp2.entity.PaqueteTour;
 import pe.edu.upeu.lp2_gp2.exception.BusinessException;
 import pe.edu.upeu.lp2_gp2.exception.ResourceNotFoundException;
+import pe.edu.upeu.lp2_gp2.repository.LugarRepository;
 import pe.edu.upeu.lp2_gp2.repository.PaqueteTourRepository;
 import pe.edu.upeu.lp2_gp2.repository.SalidaProgramadaRepository;
 
@@ -19,12 +20,14 @@ public class PaqueteTourServiceImpl implements IPaqueteTourService {
     private final PaqueteTourRepository paqueteRepository;
     private final SalidaProgramadaRepository salidaRepository;
     private final IFileStorageService fileStorageService;
+    private final LugarRepository lugarRepository;
 
     public PaqueteTourServiceImpl(PaqueteTourRepository paqueteRepository, SalidaProgramadaRepository salidaRepository,
-                                  IFileStorageService fileStorageService) {
+                                  IFileStorageService fileStorageService, LugarRepository lugarRepository) {
         this.paqueteRepository = paqueteRepository;
         this.salidaRepository = salidaRepository;
         this.fileStorageService = fileStorageService;
+        this.lugarRepository = lugarRepository;
     }
 
     @Override
@@ -85,6 +88,9 @@ public class PaqueteTourServiceImpl implements IPaqueteTourService {
 
     private void validar(PaqueteTourRequestDTO dto) {
         if (dto.noches() > dto.dias()) throw new BusinessException("Las noches no pueden ser más que los días.");
+        if (dto.lugarDestinoId() != null && !lugarRepository.existsById(dto.lugarDestinoId())) {
+            throw new BusinessException("El lugar de destino seleccionado no existe.");
+        }
     }
 
     private void copiar(PaqueteTourRequestDTO dto, PaqueteTour p) {
@@ -95,5 +101,6 @@ public class PaqueteTourServiceImpl implements IPaqueteTourService {
         p.setNoches(dto.noches());
         p.setImagen(dto.imagen() == null || dto.imagen().isBlank() ? null : dto.imagen().trim());
         p.setEstado(dto.estado() == null ? "ACTIVO" : dto.estado());
+        p.setLugarDestinoId(dto.lugarDestinoId());
     }
 }

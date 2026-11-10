@@ -1,6 +1,7 @@
 -- =====================================================================
 -- KAMPU / TOUR MANAGER v3 - Datos de demostración
--- Ejecutar DESPUÉS de 01_schema_v3.sql, como script (F5), con el usuario dueño.
+-- Ejecutar DESPUÉS de 01_schema_v3.sql y 02_extension_kampu.sql, como script (F5),
+-- con el usuario dueño.
 --
 -- Los datos pasan por los triggers de la v3, por eso el orden importa:
 --   * Las salidas se crean PROGRAMADAS (fecha_fin y cupos_disponibles los
@@ -57,32 +58,49 @@ VALUES (3, 'Colca Bus EIRL', '20498765432', 'Hernán Apaza', '+51 959887766', 'c
 INSERT INTO EMPRESA_TRANSPORTE (empresa_id, nombre_comercial, ruc, contacto_nombre, contacto_telefono, contacto_email, direccion, estado_afiliacion, disponibilidad_operativa, fecha_afiliacion)
 VALUES (4, 'Selva Trans SRL', '20187654321', 'Raúl Shapiama', '+51 982554433', NULL, 'Jr. Loreto 145, Puerto Maldonado', 'PENDIENTE', 'DISPONIBLE', DATE '2026-10-01');
 
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (1, 'Aeropuerto Alejandro Velasco Astete', 'AEROPUERTO', 'Cusco');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (2, 'Hotel Plaza de Armas', 'HOTEL', 'Cusco');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (3, 'Estación Ollantaytambo', 'TERMINAL', 'Ollantaytambo');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (4, 'Aeropuerto Jorge Chávez', 'AEROPUERTO', 'Lima');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (5, 'Hotel Miraflores Park', 'HOTEL', 'Lima');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (6, 'Barranco', 'ATRACTIVO', 'Lima');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (7, 'Aeropuerto Rodríguez Ballón', 'AEROPUERTO', 'Arequipa');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (8, 'Hotel Casona Arequipa', 'HOTEL', 'Arequipa');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (9, 'Chivay', 'CIUDAD', 'Caylloma');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (10, 'Hotel Paracas Bay', 'HOTEL', 'Paracas');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (11, 'Oasis de Huacachina', 'ATRACTIVO', 'Ica');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (12, 'Aeropuerto Padre Aldamiz', 'AEROPUERTO', 'Puerto Maldonado');
-INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad) VALUES (13, 'Tambopata Eco Lodge', 'HOTEL', 'Puerto Maldonado');
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (1, 'Aeropuerto Alejandro Velasco Astete', 'AEROPUERTO', 'Cusco', -13.535700, -71.938800);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (2, 'Hotel Plaza de Armas', 'HOTEL', 'Cusco', -13.516600, -71.978500);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (3, 'Estación Ollantaytambo', 'TERMINAL', 'Ollantaytambo', -13.263300, -72.265000);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (4, 'Aeropuerto Jorge Chávez', 'AEROPUERTO', 'Lima', -12.021900, -77.114300);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (5, 'Hotel Miraflores Park', 'HOTEL', 'Lima', -12.130600, -77.033600);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (6, 'Barranco', 'ATRACTIVO', 'Lima', -12.149100, -77.021700);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (7, 'Aeropuerto Rodríguez Ballón', 'AEROPUERTO', 'Arequipa', -16.341100, -71.583100);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (8, 'Hotel Casona Arequipa', 'HOTEL', 'Arequipa', -16.398800, -71.536900);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (9, 'Chivay', 'CIUDAD', 'Caylloma', -15.638000, -71.601700);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (10, 'Hotel Paracas Bay', 'HOTEL', 'Paracas', -13.832600, -76.250300);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (11, 'Oasis de Huacachina', 'ATRACTIVO', 'Ica', -14.087500, -75.762600);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (12, 'Aeropuerto Padre Aldamiz', 'AEROPUERTO', 'Puerto Maldonado', -12.613600, -69.228600);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (14, 'Puerto de Puno', 'TERMINAL', 'Puno', -15.840200, -70.021900);
+INSERT INTO LUGARES (lugar_id, nombre, tipo_lugar, ciudad, latitud, longitud) VALUES (13, 'Tambopata Eco Lodge', 'HOTEL', 'Puerto Maldonado', -12.833300, -69.291700);
 
--- Rutas que opera cada empresa (duración en minutos, tarifa en soles)
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (1, 1, 1, 2, 'TRASLADO', 25, 60, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (2, 1, 2, 3, 'TOUR', 120, 250, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (3, 1, 3, 2, 'TOUR', 120, 250, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (4, 1, 2, 1, 'TRASLADO', 25, 60, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (5, 2, 4, 5, 'TRASLADO', 45, 90, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (6, 2, 5, 6, 'TOUR', 20, 50, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (7, 2, 5, 10, 'INTERPROVINCIAL', 240, 450, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (8, 2, 10, 11, 'TOUR', 90, 200, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (9, 3, 7, 8, 'TRASLADO', 20, 50, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (10, 3, 8, 9, 'INTERPROVINCIAL', 180, 400, 'ACTIVA');
-INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado) VALUES (11, 4, 12, 13, 'TRASLADO', 90, 180, 'ACTIVA');
+-- Lugar de destino de cada paquete (02_extension_kampu.sql)
+-- Machu Picchu: estación del tren en Ollantaytambo
+UPDATE PAQUETES_TOUR SET lugar_destino_id = 3  WHERE paquete_id = 1;
+-- Lima Gastronómica: Barranco
+UPDATE PAQUETES_TOUR SET lugar_destino_id = 6  WHERE paquete_id = 2;
+-- Colca: Chivay
+UPDATE PAQUETES_TOUR SET lugar_destino_id = 9  WHERE paquete_id = 3;
+-- Paracas e Ica
+UPDATE PAQUETES_TOUR SET lugar_destino_id = 10 WHERE paquete_id = 4;
+-- Tambopata
+UPDATE PAQUETES_TOUR SET lugar_destino_id = 13 WHERE paquete_id = 5;
+-- Titicaca
+UPDATE PAQUETES_TOUR SET lugar_destino_id = 14 WHERE paquete_id = 6;
+
+-- Rutas que opera cada empresa (tarifa en soles). La duración es la real por carretera
+-- (tiempos habituales de viaje); en rutas nuevas, si se deja vacía, la calcula el backend
+-- con OSRM/OpenStreetMap o trg_ruta_biu con PKG_RUTAS. paquete_id: ruta hacia un paquete.
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (1, 1, 1, 2, 'TRASLADO', 20, 60, 'ACTIVA', NULL);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (2, 1, 2, 3, 'TOUR', 110, 250, 'ACTIVA', 1);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (3, 1, 3, 2, 'TOUR', 110, 250, 'ACTIVA', NULL);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (4, 1, 2, 1, 'TRASLADO', 20, 60, 'ACTIVA', NULL);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (5, 2, 4, 5, 'TRASLADO', 50, 90, 'ACTIVA', NULL);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (6, 2, 5, 6, 'TOUR', 15, 50, 'ACTIVA', 2);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (7, 2, 5, 10, 'INTERPROVINCIAL', 225, 450, 'ACTIVA', 4);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (8, 2, 10, 11, 'TOUR', 80, 200, 'ACTIVA', NULL);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (9, 3, 7, 8, 'TRASLADO', 25, 50, 'ACTIVA', NULL);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (10, 3, 8, 9, 'INTERPROVINCIAL', 180, 400, 'ACTIVA', 3);
+INSERT INTO RUTAS_PROVEEDOR (ruta_id, empresa_id, origen_id, destino_id, tipo_servicio, duracion_estimada_min, tarifa_referencial, estado, paquete_id) VALUES (11, 4, 12, 13, 'TRASLADO', 120, 180, 'ACTIVA', 5);
 
 INSERT INTO VEHICULO (vehiculo_id, empresa_id, placa, tipo_vehiculo, marca_modelo, capacidad_pax, fecha_prox_mantenimiento, estado_operativo) VALUES (1, 1, 'BUS-401', 'BUS', 'Mercedes-Benz O500', 40, DATE '2027-06-30', 'OPERATIVO');
 INSERT INTO VEHICULO (vehiculo_id, empresa_id, placa, tipo_vehiculo, marca_modelo, capacidad_pax, fecha_prox_mantenimiento, estado_operativo) VALUES (2, 1, 'VAN-152', 'VAN', 'Toyota Hiace', 15, DATE '2027-03-15', 'OPERATIVO');

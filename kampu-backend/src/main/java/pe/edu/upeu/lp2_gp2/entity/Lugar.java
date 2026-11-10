@@ -1,6 +1,7 @@
 package pe.edu.upeu.lp2_gp2.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 
 // Orígenes y destinos de las operaciones (aeropuertos, hoteles, atractivos...)
 @Entity
@@ -19,6 +20,13 @@ public class Lugar {
 
     @Column(name = "ciudad", nullable = false, length = 100)
     private String ciudad;
+
+    // Coordenadas reales (WGS84): se usan para calcular la duración de las rutas
+    @Column(name = "latitud", precision = 9, scale = 6)
+    private BigDecimal latitud;
+
+    @Column(name = "longitud", precision = 9, scale = 6)
+    private BigDecimal longitud;
 
     public Lugar() {
     }
@@ -53,5 +61,21 @@ public class Lugar {
 
     public void setCiudad(String ciudad) {
         this.ciudad = ciudad;
+    }
+
+    public BigDecimal getLatitud() {
+        return latitud;
+    }
+
+    public void setLatitud(BigDecimal latitud) {
+        this.latitud = latitud;
+    }
+
+    public BigDecimal getLongitud() {
+        return longitud;
+    }
+
+    public void setLongitud(BigDecimal longitud) {
+        this.longitud = longitud;
     }
 }
