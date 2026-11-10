@@ -1,0 +1,14 @@
+<app-landing-navbar />
+
+<main>
+  <app-landing-hero [totalTours]="tours().length" />
+
+  <app-landing-search [destinos]="destinos()" (buscar)="buscar($event)" />
+
+  <app-landing-tours [tours]="tours()" [cargando]="cargando()" [hayFiltro]="hayFiltro()"
+                     [contacto]="contacto" (limpiar)="limpiar()" />
+
+  <app-landing-beneficios />
+</main>
+
+<app-landing-footer [contacto]="contacto" />

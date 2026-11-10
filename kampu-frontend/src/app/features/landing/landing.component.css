@@ -1,0 +1,19 @@
+/* Paleta de la landing: la misma del panel administrativo (index.html → tailwind.config) */
+:host {
+  --kp-primary: #4B5B1D;        /* brand-600: botones primarios, acentos */
+  --kp-primary-hover: #3F4C18;  /* brand-700 */
+  --kp-primary-soft: #F4F6E4;   /* brand-50 */
+  --kp-secondary: #6B7E2B;      /* brand-500: botones secundarios, iconos */
+  --kp-accent: #C4BD45;         /* leaf-400: detalles */
+  --kp-bg: #FFFEF8;             /* fondo principal */
+  --kp-bg-alt: #FBF6E4;         /* fondo alterno (arena) */
+  --kp-text: #2C3610;           /* texto principal (zinc-900) */
+  --kp-muted: #78735A;          /* texto secundario (zinc-500) */
+  --kp-border: #E5DEC2;         /* zinc-200 */
+  --kp-dark: #1D2409;           /* zinc-950 */
+  --kp-ease: cubic-bezier(.4, 0, .2, 1);
+
+  display: block;
+  background: var(--kp-bg);
+  color: var(--kp-text);
+}
