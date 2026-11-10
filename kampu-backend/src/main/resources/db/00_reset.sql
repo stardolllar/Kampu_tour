@@ -1,7 +1,8 @@
 -- =====================================================================
 -- KAMPU - Borra TODO el esquema (versión anterior y v3) para reinstalar.
 -- Úsalo solo si ya tenías la base creada (con TRANSPORTE/CHOFERES o una
--- instalación previa de la v3). Luego ejecuta 01_schema_v3.sql y 02_data.sql.
+-- instalación previa de la v3). Luego ejecuta 01_schema_v3.sql, 02_extension_kampu.sql
+-- y 03_data.sql.
 -- ¡Elimina los datos! Ejecutar como script (F5) con el usuario dueño.
 -- =====================================================================
 BEGIN
@@ -11,6 +12,8 @@ BEGIN
                      'VW_EMPRESA_CAPACIDAD', 'V_RESERVAS_RESUMEN'))
               UNION ALL
               SELECT 'PACKAGE', 'PKG_ASIGNACION' FROM dual
+              UNION ALL
+              SELECT 'PACKAGE', 'PKG_RUTAS' FROM dual
               UNION ALL
               SELECT 'TABLE', column_value
                 FROM TABLE(sys.odcivarchar2list(
