@@ -338,7 +338,9 @@ CREATE OR REPLACE PACKAGE BODY PKG_SEGURIDAD_ROLES AS
      || 'VER_CLIENTES,GESTIONAR_CLIENTES,VER_RESERVAS,GESTIONAR_RESERVAS,VER_MONTOS,REGISTRAR_PAGO,'
      || 'GESTIONAR_CATALOGO,ACTUALIZAR_EJECUCION,VER_RESUMEN,'
      || 'VER_LOGISTICA,GESTIONAR_LOGISTICA,VER_OPERACIONES,GESTIONAR_OPERACIONES,'
-     || 'VER_PAQUETES_PROPIOS,INFORMAR_PAGO';
+     || 'VER_PAQUETES_PROPIOS,INFORMAR_PAGO,'
+        -- Motor de itinerarios (04_motor_itinerarios.sql)
+     || 'GESTIONAR_VUELOS,GESTIONAR_FIDS,EJECUTAR_SEGMENTOS';
 
     PROCEDURE iniciar_sesion (p_usuario VARCHAR2, p_rol VARCHAR2, p_cliente_id NUMBER DEFAULT NULL) IS
     BEGIN
@@ -383,18 +385,19 @@ CREATE OR REPLACE PACKAGE BODY PKG_SEGURIDAD_ROLES AS
             RETURN 0;
         END IF;
         IF v_rol = 'ADMIN' THEN
-            RETURN CASE WHEN p_accion IN ('VER_PAQUETES_PROPIOS', 'INFORMAR_PAGO') THEN 0 ELSE 1 END;
+            -- El Admin orquesta (FIDS) pero no ejecuta servicios en campo ni actúa como cliente
+            RETURN CASE WHEN p_accion IN ('VER_PAQUETES_PROPIOS', 'INFORMAR_PAGO', 'EJECUTAR_SEGMENTOS') THEN 0 ELSE 1 END;
         END IF;
         RETURN CASE
             -- Ventas: toda la operación comercial; sin usuarios, auditoría ni gestión de flota/tráfico
             WHEN v_rol = 'VENDEDOR' AND p_accion IN (
                  'VER_CLIENTES', 'GESTIONAR_CLIENTES', 'VER_RESERVAS', 'GESTIONAR_RESERVAS',
                  'VER_MONTOS', 'REGISTRAR_PAGO', 'GESTIONAR_CATALOGO', 'ACTUALIZAR_EJECUCION',
-                 'VER_LOGISTICA', 'VER_OPERACIONES', 'VER_RESUMEN') THEN 1
+                 'VER_LOGISTICA', 'VER_OPERACIONES', 'VER_RESUMEN', 'GESTIONAR_VUELOS') THEN 1
             -- Operador: ejecución de paquetes y tráfico; sin montos ni clientes
             WHEN v_rol = 'OPERADOR' AND p_accion IN (
                  'VER_LOGISTICA', 'GESTIONAR_LOGISTICA', 'VER_OPERACIONES', 'GESTIONAR_OPERACIONES',
-                 'ACTUALIZAR_EJECUCION', 'VER_RESUMEN') THEN 1
+                 'ACTUALIZAR_EJECUCION', 'VER_RESUMEN', 'EJECUTAR_SEGMENTOS') THEN 1
             -- Cliente: solo sus paquetes (lectura) e informar pagos
             WHEN v_rol = 'CLIENTE' AND p_accion IN ('VER_PAQUETES_PROPIOS', 'INFORMAR_PAGO') THEN 1
             ELSE 0

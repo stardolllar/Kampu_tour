@@ -1,0 +1,77 @@
+<form class="space-y-4" (ngSubmit)="guardar()" novalidate>
+  <div class="grid gap-3 sm:grid-cols-2">
+    <div>
+      <label class="label req" [attr.for]="'aer-' + tipo">Aerolínea</label>
+      <select class="field" [id]="'aer-' + tipo" name="aerolinea" [(ngModel)]="form.aerolinea">
+        @for (a of aerolineas; track a) { <option [value]="a">{{ a === 'JETSMART' ? 'JetSMART' : a === 'SKY' ? 'Sky' : a === 'OTRA' ? 'Otra' : a }}</option> }
+      </select>
+    </div>
+    <div>
+      <label class="label req" [attr.for]="'num-' + tipo">N° de vuelo</label>
+      <input class="field font-mono" [id]="'num-' + tipo" name="numeroVuelo" [(ngModel)]="form.numeroVuelo" (ngModelChange)="mayusculas('numeroVuelo')"
+             maxlength="8" placeholder="LA2380" [class.field-invalid]="errores['numeroVuelo']">
+      @if (errores['numeroVuelo']) { <p class="field-error">{{ errores['numeroVuelo'] }}</p> }
+    </div>
+    <div>
+      <label class="label req" [attr.for]="'pnr-' + tipo">Código PNR</label>
+      <input class="field font-mono tracking-widest" [id]="'pnr-' + tipo" name="codigoPnr" [(ngModel)]="form.codigoPnr" (ngModelChange)="mayusculas('codigoPnr')"
+             maxlength="6" placeholder="QX7LMB" [class.field-invalid]="errores['codigoPnr']">
+      @if (errores['codigoPnr']) { <p class="field-error">{{ errores['codigoPnr'] }}</p> }
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label class="label req" [attr.for]="'ori-' + tipo">Desde</label>
+        <input class="field font-mono" [id]="'ori-' + tipo" name="aeropuertoOrigen" [(ngModel)]="form.aeropuertoOrigen" (ngModelChange)="mayusculas('aeropuertoOrigen')"
+               maxlength="3" placeholder="LIM" [class.field-invalid]="errores['aeropuertoOrigen']">
+      </div>
+      <div>
+        <label class="label req" [attr.for]="'des-' + tipo">Hasta</label>
+        <input class="field font-mono" [id]="'des-' + tipo" name="aeropuertoDestino" [(ngModel)]="form.aeropuertoDestino" (ngModelChange)="mayusculas('aeropuertoDestino')"
+               maxlength="3" placeholder="TPP" [class.field-invalid]="errores['aeropuertoDestino']">
+      </div>
+      @if (errores['aeropuertoOrigen'] || errores['aeropuertoDestino']) {
+        <p class="field-error col-span-2">{{ errores['aeropuertoOrigen'] || errores['aeropuertoDestino'] }}</p>
+      }
+    </div>
+    <div>
+      <label class="label req" [attr.for]="'sal-' + tipo">Salida del vuelo</label>
+      <input type="datetime-local" class="field" [id]="'sal-' + tipo" name="fechaHoraSalida" [(ngModel)]="form.fechaHoraSalida" [class.field-invalid]="errores['fechaHoraSalida']">
+      @if (errores['fechaHoraSalida']) { <p class="field-error">{{ errores['fechaHoraSalida'] }}</p> }
+    </div>
+    <div>
+      <label class="label req" [attr.for]="'lle-' + tipo">Llegada del vuelo</label>
+      <input type="datetime-local" class="field" [id]="'lle-' + tipo" name="fechaHoraLlegada" [(ngModel)]="form.fechaHoraLlegada" [min]="form.fechaHoraSalida" [class.field-invalid]="errores['fechaHoraLlegada']">
+      @if (errores['fechaHoraLlegada']) { <p class="field-error">{{ errores['fechaHoraLlegada'] }}</p> }
+    </div>
+  </div>
+
+  <!-- PDF del boarding pass / e-ticket: input type="file" + arrastrar y soltar -->
+  <div>
+    <span class="label" [class.req]="!boleto?.tienePdf">Boarding pass / e-ticket (PDF, máx. 5 MB)</span>
+    <label class="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-5 text-center text-sm transition"
+           [class.border-brand-400]="arrastrando()" [class.bg-brand-50]="arrastrando()"
+           [class.border-zinc-200]="!arrastrando() && !errores['archivo']" [class.border-rose-300]="errores['archivo']"
+           (dragover)="$event.preventDefault(); arrastrando.set(true)" (dragleave)="arrastrando.set(false)" (drop)="soltar($event)">
+      <input type="file" class="sr-only" accept="application/pdf,.pdf" (change)="elegir($event)" [attr.data-testid]="'pdf-' + tipo">
+      <app-icon name="upload" size="w-5 h-5 text-zinc-400" />
+      @if (archivo) {
+        <span class="font-semibold text-zinc-800">{{ archivo.name }}</span><span class="text-xs text-zinc-500">{{ tamanio(archivo.size) }} · listo para subir</span>
+      } @else if (boleto?.tienePdf) {
+        <span class="text-zinc-700">PDF actual: <b>{{ boleto?.nombreArchivo }}</b> ({{ tamanio(boleto?.tamanioBytes) }})</span>
+        <span class="text-xs text-zinc-500">Elige otro solo si quieres reemplazarlo</span>
+      } @else {
+        <span class="text-zinc-700"><b class="text-brand-700">Elige el PDF</b> o arrástralo aquí</span>
+      }
+    </label>
+    @if (errores['archivo']) { <p class="field-error">{{ errores['archivo'] }}</p> }
+  </div>
+
+  @if (error()) { <p class="rounded-lg bg-rose-50 p-3 text-sm font-semibold text-rose-700" role="alert">{{ error() }}</p> }
+
+  <div class="flex flex-wrap justify-end gap-2">
+    @if (boleto?.tienePdf) { <button type="button" class="btn-light btn-sm" (click)="verPdf()"><app-icon name="eye" size="w-3.5 h-3.5" /> Ver PDF</button> }
+    <button type="submit" class="btn-brand btn-sm" [disabled]="enviando()">
+      <app-icon name="check" size="w-3.5 h-3.5" /> {{ enviando() ? 'Subiendo…' : (boleto ? 'Actualizar vuelo' : 'Guardar vuelo') }}
+    </button>
+  </div>
+</form>

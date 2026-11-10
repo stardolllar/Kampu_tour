@@ -2,7 +2,11 @@
   <app-portal-header />
 
   <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-    <a routerLink="/mi-cuenta" class="link text-sm font-bold"><app-icon name="arrow-left" size="w-3.5 h-3.5" /> Mis paquetes</a>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <a routerLink="/mi-cuenta" class="link text-sm font-bold"><app-icon name="arrow-left" size="w-3.5 h-3.5" /> Mis paquetes</a>
+      <a [routerLink]="['/mi-cuenta/paquetes', paquete()?.reservaId, 'itinerario']" class="btn-brand btn-sm" data-testid="ver-itinerario">
+        <app-icon name="clock" size="w-3.5 h-3.5" /> Mi itinerario en vivo</a>
+    </div>
 
     @if (cargando() && !detalle()) {
       <p class="mt-10 text-center text-sm text-zinc-500">Cargando…</p>

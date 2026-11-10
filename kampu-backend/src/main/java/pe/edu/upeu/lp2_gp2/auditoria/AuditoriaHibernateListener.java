@@ -143,8 +143,27 @@ public class AuditoriaHibernateListener implements PostInsertEventListener, Post
         return j.toString();
     }
 
+    private static String idEntidad(Object entidad) {
+        for (Class<?> c = entidad.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (f.isAnnotationPresent(jakarta.persistence.Id.class)) {
+                    try {
+                        f.setAccessible(true);
+                        return String.valueOf(f.get(entidad));
+                    } catch (IllegalAccessException e) {
+                        return entidad.toString();
+                    }
+                }
+            }
+        }
+        return entidad.toString();
+    }
+
     private static String texto(Object v) {
         if (v == null) return null;
+        // Relaciones @ManyToOne (motor de itinerarios): se registra el id de la entidad relacionada
+        if (v instanceof org.hibernate.proxy.HibernateProxy p) return String.valueOf(p.getHibernateLazyInitializer().getIdentifier());
+        if (v.getClass().isAnnotationPresent(jakarta.persistence.Entity.class)) return idEntidad(v);
         if (v instanceof BigDecimal b) return b.stripTrailingZeros().toPlainString();
         if (v instanceof Boolean b) return b ? "SI" : "NO";
         return v.toString();

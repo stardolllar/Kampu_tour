@@ -84,6 +84,10 @@ public class SeguridadInterceptor implements HandlerInterceptor {
         }
         if (ruta.startsWith("/operaciones")) return lectura ? "VER_OPERACIONES" : "GESTIONAR_OPERACIONES";
         if (ruta.startsWith("/resumen-paquetes")) return "VER_RESUMEN";
+        // Motor de itinerarios (además, cada controlador valida rol y propiedad con @PreAuthorize)
+        if (ruta.startsWith("/itinerarios")) return "GESTIONAR_VUELOS";
+        if (ruta.startsWith("/fids")) return "GESTIONAR_FIDS";
+        if (ruta.startsWith("/operador")) return "EJECUTAR_SEGMENTOS";
         return "SOLO_ADMIN";
     }
 }

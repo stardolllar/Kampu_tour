@@ -1,0 +1,56 @@
+<div class="min-h-screen bg-sand-50">
+  <app-portal-header />
+  <main class="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+    <a [routerLink]="['/mi-cuenta/paquetes', id]" class="link text-sm font-bold"><app-icon name="arrow-left" size="w-3.5 h-3.5" /> Volver al paquete</a>
+
+    @if (error()) { <p class="mt-4 rounded-lg bg-rose-50 p-3 text-sm font-semibold text-rose-700" role="alert">{{ error() }}</p> }
+
+    @if (datos(); as d) {
+      <h1 class="mt-3 text-[26px] font-black tracking-tight text-zinc-900">Mi itinerario</h1>
+      <p class="text-sm text-zinc-500">{{ d.paquete }}@if (d.hotel) { · Hotel {{ d.hotel }} } · Reserva #{{ d.reservaId }}</p>
+
+      @if (d.mensajeEnVivo) {
+        <div class="mt-5 flex items-center gap-3 rounded-2xl bg-zinc-950 p-4 text-white" role="status" aria-live="polite" data-testid="en-vivo">
+          <span class="relative flex h-3 w-3 shrink-0"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-3 w-3 rounded-full bg-emerald-400"></span></span>
+          <span class="font-semibold">{{ d.mensajeEnVivo }}</span>
+        </div>
+      }
+
+      <section class="card mt-6 p-5">
+        <h2 class="font-extrabold text-zinc-900">Mis vuelos</h2>
+        <ul class="mt-3 space-y-2 text-sm">
+          @for (b of d.boletos; track b.boletoId) {
+            <li class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3">
+              <div>
+                <div class="font-semibold">{{ b.tipoVuelo === 'LLEGADA' ? 'Ida' : 'Regreso' }} · {{ b.aerolinea }} {{ b.numeroVuelo }} · PNR <span class="font-mono">{{ b.codigoPnr }}</span></div>
+                <div class="text-xs text-zinc-500">{{ b.aeropuertoOrigen }} {{ b.fechaHoraSalida | date:'dd/MM HH:mm' }} → {{ b.aeropuertoDestino }} {{ b.fechaHoraLlegada | date:'dd/MM HH:mm' }}</div>
+              </div>
+              @if (b.tienePdf) { <button type="button" class="btn-light btn-sm" (click)="verPdf(b.boletoId)"><app-icon name="file-text" size="w-3.5 h-3.5" /> Boleto PDF</button> }
+            </li>
+          } @empty { <li class="text-zinc-500">La agencia aún no ha cargado tus vuelos.</li> }
+        </ul>
+        <button type="button" class="btn-light btn-sm mt-3" (click)="comprobante()"><app-icon name="file-text" size="w-3.5 h-3.5" /> Ver comprobante</button>
+      </section>
+
+      <section class="card mt-6 p-5">
+        <h2 class="font-extrabold text-zinc-900">Servicios</h2>
+        <ol class="mt-3 space-y-3">
+          @for (s of d.segmentos; track s.segmentoId) {
+            <li class="rounded-xl border p-3" [class.border-emerald-300]="s.choferEnCamino" [class.border-zinc-200]="!s.choferEnCamino">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="font-semibold text-zinc-900">{{ tipoTexto[s.tipo] }} · {{ s.horaInicio | date:'EEE dd/MM HH:mm' }}</span>
+                <span class="text-xs font-bold uppercase" [class.text-emerald-700]="s.choferEnCamino" [class.text-zinc-500]="!s.choferEnCamino">{{ texto[s.estado] }}</span>
+              </div>
+              <div class="text-xs text-zinc-500">{{ s.origen }} → {{ s.destino }}@if (s.placa) { · Vehículo {{ s.placa }} }</div>
+              @if (s.pasos > 0) {
+                <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-100"><div class="h-full rounded-full bg-emerald-500" [style.width.%]="s.paso * 100 / s.pasos"></div></div>
+              }
+            </li>
+          } @empty { <li class="text-sm text-zinc-500">Tu itinerario aún no tiene servicios.</li> }
+        </ol>
+      </section>
+    } @else if (!error()) {
+      <p class="mt-10 text-center text-sm text-zinc-500">Cargando…</p>
+    }
+  </main>
+</div>

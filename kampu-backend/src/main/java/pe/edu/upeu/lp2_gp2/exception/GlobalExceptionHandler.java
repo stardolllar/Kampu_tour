@@ -135,7 +135,31 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorDTO> archivoGrande(MaxUploadSizeExceededException e) {
-        return responder(HttpStatus.PAYLOAD_TOO_LARGE, "La imagen supera el tamaño máximo permitido.");
+        return responder(HttpStatus.PAYLOAD_TOO_LARGE, "El archivo supera el tamaño máximo permitido ("
+                + (e.getMaxUploadSize() > 0 ? e.getMaxUploadSize() / 1024 / 1024 + " MB" : "límite del servidor") + ").");
+    }
+
+    // Motor de itinerarios: @PreAuthorize (rol o viaje ajeno) y archivos PDF
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorDTO> accesoSpring(org.springframework.security.access.AccessDeniedException e) {
+        String m = e.getMessage() == null || e.getMessage().startsWith("Access Denied")
+                ? "No tienes permiso para esta operación (no es tu rol o el viaje no está asignado a ti)." : e.getMessage();
+        return responder(HttpStatus.FORBIDDEN, m);
+    }
+
+    @ExceptionHandler(pe.edu.upeu.lp2_gp2.itinerario.almacenamiento.ArchivoInvalidoException.class)
+    public ResponseEntity<ErrorDTO> archivoInvalido(pe.edu.upeu.lp2_gp2.itinerario.almacenamiento.ArchivoInvalidoException e) {
+        return responder(e.isDemasiadoGrande() ? HttpStatus.PAYLOAD_TOO_LARGE : HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    @ExceptionHandler(pe.edu.upeu.lp2_gp2.itinerario.almacenamiento.AlmacenamientoException.class)
+    public ResponseEntity<ErrorDTO> almacenamiento(pe.edu.upeu.lp2_gp2.itinerario.almacenamiento.AlmacenamientoException e) {
+        return responder(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
+    }
+
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorDTO> concurrencia(org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+        return responder(HttpStatus.CONFLICT, "Otro usuario cambió este registro al mismo tiempo. Actualiza la pantalla e inténtalo de nuevo.");
     }
 
     // Errores de la base de datos: reglas de los triggers / PKG_ASIGNACION (ORA-20xxx)

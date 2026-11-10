@@ -21,6 +21,7 @@ BEGIN
               UNION ALL
               SELECT 'TABLE', column_value
                 FROM TABLE(sys.odcivarchar2list(
+                     'SEGMENTOS_OPERATIVOS', 'BOLETOS_AEREOS', 'RESERVAS_MASTER',             -- itinerarios
                      'AUDITORIA', 'HISTORIAL_OPERACIONES', 'OPERACIONES_TRANSPORTE',          -- v4
                      'HISTORIAL_TRAFICO_OPERACION', 'OPERACION_TRANSPORTE',                   -- v3
                      'PAGOS', 'PASAJEROS_RESERVA', 'DETALLE_RESERVA', 'RESERVAS', 'SALIDAS_PROGRAMADAS',

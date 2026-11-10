@@ -33,7 +33,11 @@ export class ShellComponent {
     { ruta: '/clientes', texto: 'Clientes', icono: 'users', permiso: 'VER_CLIENTES' },
     { ruta: '/operaciones', texto: 'Tráfico', icono: 'truck', permiso: 'VER_OPERACIONES' },
     { ruta: '/recursos', texto: 'Logística', icono: 'map-pin', permiso: 'VER_LOGISTICA' },
-    { ruta: '/auditoria', texto: 'Auditoría', icono: 'file-text', permiso: 'VER_AUDITORIA' }
+    { ruta: '/auditoria', texto: 'Auditoría', icono: 'file-text', permiso: 'VER_AUDITORIA' },
+    // Motor de itinerarios
+    { ruta: '/vuelos', texto: 'Vuelos', icono: 'upload', permiso: 'GESTIONAR_VUELOS' },
+    { ruta: '/fids', texto: 'FIDS', icono: 'compass', permiso: 'GESTIONAR_FIDS' },
+    { ruta: '/mi-jornada', texto: 'Mi jornada', icono: 'clock', permiso: 'EJECUTAR_SEGMENTOS' }
   ];
   menu = computed(() => this.todo.filter(m => !m.permiso || this.auth.puede(m.permiso)));
   rolTexto = computed(() => etiqueta(this.auth.rol()));

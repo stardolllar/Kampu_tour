@@ -32,3 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 images/
+
+### Archivos subidos (PDF de boletos aéreos): nunca al repositorio ###
+uploads/

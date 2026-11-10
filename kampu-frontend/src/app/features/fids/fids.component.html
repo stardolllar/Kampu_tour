@@ -1,0 +1,132 @@
+<div class="page-header">
+  <div>
+    <div class="eyebrow mb-1.5">Torre de control</div>
+    <h1 class="h1">FIDS · Tráfico en vivo</h1>
+    <p class="page-sub">Pasajeros de distintas reservas agrupados por aeropuerto o destino y horario. Asigna un vehículo y un operador a cada grupo.</p>
+  </div>
+  <div class="flex flex-wrap items-end gap-2">
+    <div>
+      <label class="label" for="fids-fecha">Fecha</label>
+      <input id="fids-fecha" type="date" class="field" [ngModel]="fecha()" (ngModelChange)="cambiarFecha($event)">
+    </div>
+    <div>
+      <label class="label" for="fids-tipo">Servicio</label>
+      <select id="fids-tipo" class="field" [ngModel]="tipo()" (ngModelChange)="cambiarTipo($event)">
+        <option value="">Todos</option>
+        <option value="TRANSFER_IN">Transfer In</option>
+        <option value="TOUR_DIARIO">Tours</option>
+        <option value="TRANSFER_OUT">Transfer Out</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+@if (tablero(); as t) {
+  <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+    <span><b class="text-zinc-900">{{ t.grupos.length }}</b> grupos</span>
+    <span><b class="text-zinc-900">{{ t.segmentos }}</b> reservas-servicio · <b class="text-zinc-900">{{ t.pax }}</b> pax</span>
+    <span [class.text-amber-700]="t.sinAsignar > 0"><b>{{ t.sinAsignar }}</b> sin asignar</span>
+    <span class="ml-auto flex items-center gap-2 text-xs text-zinc-500" aria-live="polite">
+      <span class="h-2 w-2 rounded-full" [class.bg-emerald-500]="!error()" [class.bg-rose-500]="error()" [class.animate-pulse]="cargando()"></span>
+      En vivo · actualizado {{ t.generadoEn | date:'HH:mm:ss' }}
+      <button type="button" class="icon-btn" title="Actualizar ahora" (click)="recargar()"><app-icon name="clock" size="w-4 h-4" /></button>
+    </span>
+  </div>
+}
+@if (error()) { <p class="mb-4 rounded-lg bg-rose-50 p-3 text-sm font-semibold text-rose-700" role="alert">{{ error() }}</p> }
+
+<!-- Tablero estilo aeropuerto -->
+<section class="overflow-hidden rounded-2xl bg-zinc-950 text-zinc-100 shadow-lifted" data-testid="tablero-fids">
+  <div class="overflow-x-auto">
+    <table class="w-full font-mono text-[13px]">
+      <thead class="bg-zinc-900 text-[10.5px] uppercase tracking-[0.14em] text-amber-300/90">
+        <tr>
+          <th class="px-4 py-3 text-left">Hora</th><th class="px-4 py-3 text-left">Servicio</th><th class="px-4 py-3 text-left">Aeropuerto / destino</th>
+          <th class="px-4 py-3 text-left">Vuelos</th><th class="px-4 py-3 text-right">Pax</th><th class="px-4 py-3 text-left">Vehículo · operador</th>
+          <th class="px-4 py-3 text-left">Estado</th><th class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (g of tablero()?.grupos ?? []; track g.clave) {
+          <tr class="border-t border-zinc-800 align-top hover:bg-zinc-900/70">
+            <td class="px-4 py-3 text-lg font-bold text-amber-200">{{ hora(g.desde) }}@if (g.hasta !== g.desde) {<span class="text-xs text-zinc-500">–{{ hora(g.hasta) }}</span>}</td>
+            <td class="px-4 py-3">{{ tipoTexto[g.tipo] }}</td>
+            <td class="px-4 py-3 font-sans">{{ g.lugar }}</td>
+            <td class="px-4 py-3">@for (v of g.vuelos; track v) { <div>{{ v }}</div> } @empty { <span class="text-zinc-600">—</span> }</td>
+            <td class="px-4 py-3 text-right">{{ g.pax }}<div class="text-[11px] text-zinc-500">{{ g.reservas }} res.</div></td>
+            <td class="px-4 py-3">
+              @if (g.asignado) {
+                <div [class.text-rose-300]="g.excedeCapacidad">{{ g.placa }} ({{ g.capacidad }})</div><div class="text-zinc-400">{{ g.operador }}</div>
+                <div class="text-[10.5px] text-zinc-600">{{ g.grupoCodigo }}</div>
+              } @else { <span class="text-amber-300">SIN ASIGNAR</span> }
+            </td>
+            <td class="px-4 py-3 font-bold uppercase" [class]="claseEstado(g)">{{ g.asignado ? texto[g.estado] : 'Por consolidar' }}</td>
+            <td class="px-4 py-3 text-right whitespace-nowrap font-sans">
+              <button type="button" class="rounded-md px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800" (click)="abierto.set(abierto() === g.clave ? null : g.clave)">
+                {{ abierto() === g.clave ? 'Ocultar' : 'Detalle' }}</button>
+              @if (g.estado === 'PROGRAMADO') {
+                <button type="button" class="ml-1 rounded-md bg-amber-300 px-2.5 py-1 text-xs font-bold text-zinc-950 hover:bg-amber-200" (click)="abrirAsignacion(g)" data-testid="asignar">
+                  {{ g.asignado ? 'Reasignar' : 'Asignar' }}</button>
+                @if (g.asignado) { <button type="button" class="ml-1 rounded-md px-2 py-1 text-xs text-rose-300 hover:bg-zinc-800" (click)="liberar(g)">Liberar</button> }
+              }
+            </td>
+          </tr>
+          @if (abierto() === g.clave) {
+            <tr class="bg-zinc-900/60"><td colspan="8" class="px-6 py-3 font-sans">
+              <ul class="space-y-1 text-xs text-zinc-300">
+                @for (s of g.segmentos; track s.segmentoId) {
+                  <li>#{{ s.reservaId }} {{ s.cliente }} · {{ s.pax }} pax · {{ s.origen }} → {{ s.destino }} · {{ hora(s.horaInicio) }}
+                    @if (s.vuelo) { · ✈ {{ s.vuelo }} (PNR {{ s.pnr }}) } · <b>{{ texto[s.estado] }}</b></li>
+                }
+              </ul>
+            </td></tr>
+          }
+        } @empty {
+          <tr><td colspan="8" class="px-4 py-10 text-center font-sans text-zinc-500">{{ tablero() ? 'No hay servicios para esta fecha.' : 'Cargando tablero…' }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Asignación (consolidación cruzada) -->
+@if (grupoSel(); as g) {
+  <div class="fixed inset-0 z-50 grid place-items-center bg-zinc-950/50 p-4" (click)="grupoSel.set(null)">
+    <div class="card w-full max-w-lg p-6" role="dialog" aria-modal="true" aria-labelledby="asig-titulo" (click)="$event.stopPropagation()">
+      <h2 id="asig-titulo" class="text-lg font-extrabold text-zinc-900">{{ tipoTexto[g.tipo] }} · {{ g.lugar }} · {{ hora(g.desde) }}</h2>
+      <p class="text-sm text-zinc-500">Elige qué reservas viajan juntas.</p>
+      <ul class="mt-4 space-y-2">
+        @for (s of g.segmentos; track s.segmentoId) {
+          <li><label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" class="mt-1" [checked]="elegidos().has(s.segmentoId)" [disabled]="s.estado !== 'PROGRAMADO'" (change)="alternar(s.segmentoId)">
+            <span><b>#{{ s.reservaId }} {{ s.cliente }}</b> · {{ s.pax }} pax · {{ hora(s.horaInicio) }}@if (s.vuelo) { · {{ s.vuelo }} }<br>
+              <span class="text-xs text-zinc-500">{{ s.origen }} → {{ s.destino }}</span></span>
+          </label></li>
+        }
+      </ul>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label req" for="asig-veh">Vehículo</label>
+          <select id="asig-veh" class="field" [(ngModel)]="vehiculoId">
+            <option [ngValue]="null" disabled>Elige…</option>
+            @for (v of recursos().vehiculos; track v.vehiculoId) {
+              <option [ngValue]="v.vehiculoId" [disabled]="v.capacidad < paxElegidos()">{{ v.placa }} · {{ v.capacidad }} asientos{{ v.capacidad < paxElegidos() ? ' (no alcanza)' : '' }}</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label class="label req" for="asig-op">Operador (chofer / guía)</label>
+          <select id="asig-op" class="field" [(ngModel)]="operadorId">
+            <option [ngValue]="null" disabled>Elige…</option>
+            @for (o of recursos().operadores; track o.usuarioId) { <option [ngValue]="o.usuarioId">{{ o.username }}</option> }
+          </select>
+        </div>
+      </div>
+      <p class="mt-3 text-sm text-zinc-600">{{ elegidos().size }} reserva(s) · <b>{{ paxElegidos() }}</b> pasajeros</p>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="btn-light" (click)="grupoSel.set(null)">Cancelar</button>
+        <button type="button" class="btn-brand" [disabled]="asignando()" (click)="asignar()"><app-icon name="check" size="w-4 h-4" /> Asignar viaje</button>
+      </div>
+    </div>
+  </div>
+}

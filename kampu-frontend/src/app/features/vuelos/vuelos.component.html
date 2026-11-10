@@ -1,0 +1,126 @@
+<div class="page-header">
+  <div>
+    <div class="eyebrow mb-1.5">Booking</div>
+    <h1 class="h1">Vuelos e itinerarios</h1>
+    <p class="page-sub">Carga los vuelos comprados en LATAM, Sky o JetSMART con su boarding pass. La reserva se confirma y el transfer se programa solo.</p>
+  </div>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+  <!-- Lista de reservas -->
+  <section class="card overflow-hidden self-start">
+    <div class="card-header flex-wrap">
+      <div class="seg !text-xs">
+        <button type="button" class="seg-btn !px-2.5 !py-1" [class.on]="filtro() === 'PENDIENTES'" (click)="filtro.set('PENDIENTES')">Vuelo pendiente {{ contar('PENDIENTES') }}</button>
+        <button type="button" class="seg-btn !px-2.5 !py-1" [class.on]="filtro() === 'CONFIRMADAS'" (click)="filtro.set('CONFIRMADAS')">Con vuelo {{ contar('CONFIRMADAS') }}</button>
+        <button type="button" class="seg-btn !px-2.5 !py-1" [class.on]="filtro() === 'TODAS'" (click)="filtro.set('TODAS')">Todas</button>
+      </div>
+      <input class="field !py-1.5 max-w-[200px]" placeholder="Buscar…" [ngModel]="q()" (ngModelChange)="q.set($event)" aria-label="Buscar reserva">
+    </div>
+    <ul class="divide-y divide-zinc-100 max-h-[70vh] overflow-y-auto">
+      @for (i of visibles(); track i.reservaId) {
+        <li>
+          <button type="button" class="w-full px-5 py-3 text-left transition hover:bg-sand-50" [class.bg-brand-50]="sel()?.reservaId === i.reservaId" (click)="abrir(i)">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold text-zinc-900 truncate">#{{ i.reservaId }} · {{ i.cliente }}</span>
+              <span class="shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold uppercase" [class]="claseEstado(i.estadoLogistico)">
+                {{ i.estadoLogistico ? texto[i.estadoLogistico] : 'Sin itinerario' }}</span>
+            </div>
+            <div class="mt-0.5 text-xs text-zinc-500 truncate">{{ i.paquete }} · {{ i.fechaInicio | date:'dd/MM' }}–{{ i.fechaFin | date:'dd/MM/yyyy' }} · {{ i.pax }} pax
+              @if (i.boletos.length) { · ✈ {{ i.boletos.length }} }</div>
+          </button>
+        </li>
+      } @empty {
+        <li class="empty"><span class="ico"><app-icon name="inbox" size="w-6 h-6" /></span>{{ cargando() ? 'Cargando…' : 'No hay reservas en este filtro.' }}</li>
+      }
+    </ul>
+  </section>
+
+  <!-- Detalle -->
+  <section class="space-y-6">
+    @if (sel(); as d) {
+      <div class="card p-5 sm:p-6">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 class="text-lg font-extrabold text-zinc-900">Reserva #{{ d.reservaId }} · {{ d.cliente }}</h2>
+            <p class="text-sm text-zinc-500">{{ d.paquete }} · {{ d.fechaInicio | date:'dd/MM/yyyy' }} a {{ d.fechaFin | date:'dd/MM/yyyy' }} · {{ d.pax }} pasajeros</p>
+          </div>
+          <span class="rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase" [class]="claseEstado(d.estadoLogistico)">{{ d.estadoLogistico ? texto[d.estadoLogistico] : 'Sin itinerario' }}</span>
+        </div>
+
+        <h3 class="form-section-title mt-5 mb-3"><app-icon name="map-pin" size="w-4 h-4" /> 1. Itinerario</h3>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="label req" for="it-hotel">Hotel del pasajero</label>
+            <select id="it-hotel" class="field" [(ngModel)]="form.hotelId">
+              <option [ngValue]="null" disabled>Elige…</option>
+              @for (h of hoteles(); track h.lugarId) { <option [ngValue]="h.lugarId">{{ h.nombre }} · {{ h.ciudad }}</option> }
+            </select>
+          </div>
+          <div>
+            <label class="label req" for="it-aero">Aeropuerto de llegada</label>
+            <select id="it-aero" class="field" [(ngModel)]="form.aeropuertoId">
+              <option [ngValue]="null" disabled>Elige…</option>
+              @for (a of aeropuertos(); track a.lugarId) { <option [ngValue]="a.lugarId">{{ a.nombre }}</option> }
+            </select>
+          </div>
+        </div>
+        <div class="mt-3 space-y-2">
+          @for (t of form.tours; track $index) {
+            <div class="flex flex-wrap items-end gap-2">
+              <div class="min-w-[180px] flex-1">
+                <label class="label" [attr.for]="'tour-d-' + $index">Tour día {{ $index + 1 }}</label>
+                <select class="field" [id]="'tour-d-' + $index" [(ngModel)]="t.destinoId">
+                  <option [ngValue]="null" disabled>Atractivo…</option>
+                  @for (a of atractivos(); track a.lugarId) { <option [ngValue]="a.lugarId">{{ a.nombre }} · {{ a.ciudad }}</option> }
+                </select>
+              </div>
+              <div>
+                <label class="label" [attr.for]="'tour-h-' + $index">Recojo</label>
+                <input type="datetime-local" class="field" [id]="'tour-h-' + $index" [(ngModel)]="t.horaRecojo" [min]="(d.fechaInicio ?? '') + 'T00:00'" [max]="(d.fechaFin ?? '') + 'T23:59'">
+              </div>
+              <button type="button" class="icon-btn-danger mb-1" title="Quitar tour" (click)="quitarTour($index)"><app-icon name="trash" size="w-4 h-4" /></button>
+            </div>
+          }
+        </div>
+        <div class="mt-3 flex flex-wrap justify-between gap-2">
+          <button type="button" class="btn-light btn-sm" (click)="agregarTour()"><app-icon name="plus" size="w-3.5 h-3.5" /> Agregar tour</button>
+          <button type="button" class="btn-dark btn-sm" [disabled]="guardando()" (click)="guardarItinerario()"><app-icon name="check" size="w-3.5 h-3.5" /> {{ d.estadoLogistico ? 'Guardar itinerario' : 'Abrir itinerario' }}</button>
+        </div>
+      </div>
+
+      @if (d.estadoLogistico) {
+        <div class="grid gap-6 xl:grid-cols-2">
+          <div class="card p-5">
+            <h3 class="form-section-title mb-3"><app-icon name="arrow-right" size="w-4 h-4" /> 2. Vuelo de llegada</h3>
+            <app-boleto-aereo-form [reservaId]="d.reservaId" tipo="LLEGADA" [boleto]="llegada()" [aeropuertoLocal]="iataLocal()" (guardado)="vueloGuardado($event)" />
+          </div>
+          <div class="card p-5">
+            <h3 class="form-section-title mb-3"><app-icon name="arrow-left" size="w-4 h-4" /> 3. Vuelo de regreso</h3>
+            <app-boleto-aereo-form [reservaId]="d.reservaId" tipo="SALIDA" [boleto]="salida()" [aeropuertoLocal]="iataLocal()" (guardado)="vueloGuardado($event)" />
+          </div>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="card-header"><h3 class="card-title"><span class="ico"><app-icon name="clock" size="w-4 h-4" /></span>Segmentos operativos</h3></div>
+          <ul class="divide-y divide-zinc-100 text-sm">
+            @for (s of d.segmentos; track s.segmentoId) {
+              <li class="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                <div>
+                  <div class="font-semibold text-zinc-900">{{ tipoTexto[s.tipo] }} · {{ s.horaInicio | date:'dd/MM HH:mm' }}</div>
+                  <div class="text-xs text-zinc-500">{{ s.origen }} → {{ s.destino }} · {{ s.pax }} pax @if (s.vuelo) { · ✈ {{ s.vuelo }} }</div>
+                </div>
+                <div class="text-right text-xs">
+                  <div class="font-bold text-zinc-700">{{ texto[s.estado] }}</div>
+                  <div class="text-zinc-500">{{ s.grupoCodigo ? s.placa + ' · ' + s.operador : (s.tipo === 'ALOJAMIENTO' ? '' : 'Sin asignar (FIDS)') }}</div>
+                </div>
+              </li>
+            } @empty { <li class="empty">Aún no hay segmentos.</li> }
+          </ul>
+        </div>
+      }
+    } @else {
+      <div class="card p-10 text-center text-zinc-500"><app-icon name="ticket" size="w-8 h-8 mx-auto text-zinc-300" /><p class="mt-3">Elige una reserva para cargar sus vuelos.</p></div>
+    }
+  </section>
+</div>

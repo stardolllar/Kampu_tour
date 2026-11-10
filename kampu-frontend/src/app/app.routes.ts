@@ -17,6 +17,10 @@ import { MisPaquetesComponent } from './features/portal/mis-paquetes.component';
 import { PaqueteClienteComponent } from './features/portal/paquete-cliente.component';
 import { clienteGuard, permisoGuard, personalGuard } from './core/services/guards';
 import { AuditoriaComponent } from './features/auditoria/auditoria.component';
+import { VuelosComponent } from './features/vuelos/vuelos.component';
+import { FidsComponent } from './features/fids/fids.component';
+import { JornadaComponent } from './features/operador/jornada.component';
+import { ItinerarioClienteComponent } from './features/portal/itinerario-cliente.component';
 
 // Permiso que exige cada pantalla (PKG_SEGURIDAD_ROLES; el backend vuelve a validarlo en cada petición)
 const permiso = (p: string) => ({ permiso: p });
@@ -28,6 +32,7 @@ export const routes: Routes = [
   { path: 'registro', component: RegistroComponent },
   { path: 'mi-cuenta', component: MisPaquetesComponent, canActivate: [clienteGuard] },
   { path: 'mi-cuenta/paquetes/:id', component: PaqueteClienteComponent, canActivate: [clienteGuard] },
+  { path: 'mi-cuenta/paquetes/:id/itinerario', component: ItinerarioClienteComponent, canActivate: [clienteGuard] },
   {
     path: '',
     component: ShellComponent,
@@ -44,7 +49,11 @@ export const routes: Routes = [
       { path: 'clientes', component: ClientesComponent, data: permiso('VER_CLIENTES') },
       { path: 'operaciones', component: OperacionesComponent, data: permiso('VER_OPERACIONES') },
       { path: 'recursos', component: RecursosComponent, data: permiso('VER_LOGISTICA') },
-      { path: 'auditoria', component: AuditoriaComponent, data: permiso('VER_AUDITORIA') }
+      { path: 'auditoria', component: AuditoriaComponent, data: permiso('VER_AUDITORIA') },
+      // Motor de itinerarios
+      { path: 'vuelos', component: VuelosComponent, data: permiso('GESTIONAR_VUELOS') },
+      { path: 'fids', component: FidsComponent, data: permiso('GESTIONAR_FIDS') },
+      { path: 'mi-jornada', component: JornadaComponent, data: permiso('EJECUTAR_SEGMENTOS') }
     ]
   },
   { path: '**', redirectTo: '' }

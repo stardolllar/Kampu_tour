@@ -170,6 +170,44 @@ Resto de la API (bajo `/lp2_gp2/api/v1`, con token salvo lo indicado):
 Errores: `{ "status", "error", "timestamp" }` — 400 validación/regla, 401 sin sesión o sesión vencida, 403 rol sin permiso,
 404 no existe, 409 duplicado. Los `RAISE_APPLICATION_ERROR` de Oracle se traducen a mensajes en español en `ErroresOracle`.
 
+## Motor de itinerarios (Tour Manager estilo FIDS)
+
+Módulo nuevo (`pe.edu.upeu.lp2_gp2.itinerario` y `04_motor_itinerarios.sql`). No modifica las tablas existentes;
+la reserva comercial sigue en `RESERVAS` y su lado logístico vive en `RESERVAS_MASTER` (relación 1 a 1).
+
+| Tabla / entidad | Qué es |
+|---|---|
+| `RESERVAS_MASTER` / `ReservaMaster` | Paquete vendido como unidad logística: `estado_logistico` (`VUELO_PENDIENTE` → `CONFIRMADO_CON_VUELO` → `EN_CURSO` → `FINALIZADO`), hotel y aeropuerto |
+| `BOLETOS_AEREOS` / `BoletoAereo` | Vuelo comprado fuera (LATAM / Sky / JetSMART): PNR, aerolínea, horas y ruta del PDF. Uno de `LLEGADA` y uno de `SALIDA` por reserva |
+| `SEGMENTOS_OPERATIVOS` / `SegmentoOperativo` | `TRANSFER_IN`, `TOUR_DIARIO`, `TRANSFER_OUT`, `ALOJAMIENTO`; con `@ManyToOne` a `ReservaMaster`, `BoletoAereo`, `Vehiculo`, `Lugar` y `UsuarioSistema` (operador); `grupo_codigo` = viaje consolidado; `@Version` |
+
+| Rol | Pantalla | API | Qué hace |
+|---|---|---|---|
+| Ventas / Admin | **Vuelos** (`/vuelos`) | `/itinerarios/**` | Abre el itinerario (hotel, aeropuerto, tours) y sube el vuelo con `FormData` (`datos` JSON + `archivo` PDF). Al guardar: `CONFIRMADO_CON_VUELO` y se crea o actualiza el `TRANSFER_IN` (hora de llegada) o el `TRANSFER_OUT` (3 h antes del despegue) |
+| Admin | **FIDS** (`/fids`) | `/fids/**` | Tablero en vivo (cada 15 s). Agrupa segmentos de **distintas reservas** por aeropuerto/destino y ventana horaria (60 min transfers, 3 h tours) y les asigna vehículo + operador validando capacidad, estado y cruces de horario |
+| Operador | **Mi jornada** (`/mi-jornada`) | `/operador/**` | Solo sus viajes de **hoy**: manifiesto de pasajeros, ruta de hoteles optimizada con OSRM (`/trip`, con respaldo por cercanía) y avance **estricto** de estados |
+| Cliente | **Mi itinerario en vivo** (`/mi-cuenta/paquetes/:id/itinerario`) | `/portal/itinerarios/**`, `/portal/boletos/{id}/pdf` | "¿Mi chofer ya viene?" (cada 20 s), PDF de sus boletos y comprobante |
+
+Secuencias de estado: Transfer In `EN_AEROPUERTO → PASAJERO_ABORDADO → EN_TRANSITO_A_HOTEL → DEJADO_EN_HOTEL`;
+Tour `RECOGIENDO_HOTEL → RUMBO_AL_DESTINO → EN_ATRACTIVO → RETORNANDO → FINALIZADO_EN_HOTEL`;
+Transfer Out `RECOGIENDO_HOTEL → EN_TRANSITO_A_AEROPUERTO → DEJADO_EN_AEROPUERTO`.
+
+**Spring Security.** `TokenAuthenticationFilter` convierte el token del sistema en un `Authentication` con `ROLE_<rol>`.
+Las URLs existentes siguen `permitAll` (las controla `SeguridadInterceptor` como antes). Los controladores del módulo usan
+`@PreAuthorize`; el operador además `@segmentoSeguridad.esOperadorDelGrupo(#codigo, authentication)`, de modo que no puede
+tocar viajes de otro (403), y el servicio lo vuelve a verificar con los segmentos bloqueados. Permisos nuevos en
+`PKG_SEGURIDAD_ROLES`: `GESTIONAR_VUELOS` (Ventas, Admin), `GESTIONAR_FIDS` (Admin) y `EJECUTAR_SEGMENTOS` (solo Operador).
+
+**PDF (`FileStorageService`).** Máximo 5 MB (`kampu.boletos.max-bytes`). Solo `.pdf` cuyo contenido empiece por `%PDF-`.
+Se guarda como `uploads/boletos/<año>/<mes>/<uuid>.pdf` (`kampu.boletos.directorio`, fuera de Git) y en la BD va solo la
+ruta relativa. Si la transacción falla, se borra el PDF nuevo; si se confirma, se borra el reemplazado.
+`MaxUploadSizeExceededException` (límite global de 10 MB) y archivos inválidos responden 413 o 400 con mensaje claro.
+
+**Instalación:** después de `03_particionamiento_roles.sql`, ejecuta `04_motor_itinerarios.sql`. Crea las 3 tablas y una demo
+de Tarapoto para **hoy**: dos reservas que llegan a TPP en LATAM y Sky con 25 min de diferencia (se consolidan en el FIDS),
+y los operadores `chofer.luis` / `guia.rosa` con contraseña `operador123`.
+Si cambiaste `01_schema_v4.sql`, vuelve a ejecutar los scripts desde `00_reset.sql`.
+
 ## Rediseño visual del frontend (UI/UX)
 
 Esta versión solo cambia la **apariencia** del frontend (`kampu-frontend`). El backend, la base de datos, la API,
