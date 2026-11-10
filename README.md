@@ -214,6 +214,9 @@ Las mismas reglas se aplican en ambos lados: `kampu-frontend/src/app/core/utils/
 
 1. Usuario dueño del esquema (por defecto `LP2` / `admin123`) con permisos para crear tablas, vistas, secuencias,
    procedimientos y triggers. Para el paso 4 también `CREATE ROLE` (`GRANT CREATE ROLE TO LP2;` como DBA).
+   **Antes de nada**, un DBA (usuario `SYSTEM`) ejecuta una vez `00_permisos_dba.sql`. Da a `LP2` los permisos
+   `CREATE VIEW`, `CREATE PROCEDURE`, `CREATE TRIGGER`, `CREATE ROLE` y la cuota de espacio. El rol `RESOURCE` **no**
+   incluye `CREATE VIEW`: sin este paso las vistas fallan con *ORA-01031: privilegios insuficientes*.
 2. Conectado como ese usuario, ejecuta **en orden** (SQL Developer: "Ejecutar script" F5; SQL*Plus: `@archivo`):
    1. `00_reset.sql` — solo si ya tenías una instalación anterior (v1, v3 o v4). **Borra todos los datos.**
    2. `01_schema_v4.sql` — 14 tablas + `AUDITORIA`, índices únicos (documento, correo, teléfono), secuencia y los 8 objetos. Al final todos deben salir `VALID`.
