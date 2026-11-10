@@ -1,3 +1,4 @@
+import { AuthService } from '../../core/services/auth.service';
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -33,6 +34,8 @@ const EN_CURSO: EstadoOperacion[] = ['ASIGNADO', 'EMBARQUE', 'EN_RUTA'];
 export class OperacionesComponent {
   store = inject(TourStore);
   private alerts = inject(AlertService);
+  // GESTIONAR_OPERACIONES: Admin y Operador. Ventas solo consulta el tráfico (VER_OPERACIONES)
+  gestiona = inject(AuthService).puede('GESTIONAR_OPERACIONES');
   etiqueta = etiqueta;
 
   grupos: { valor: Grupo; texto: string }[] = [

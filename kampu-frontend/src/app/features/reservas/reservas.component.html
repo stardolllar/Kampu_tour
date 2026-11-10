@@ -4,7 +4,9 @@
     <h1 class="h1">Reservas</h1>
     <p class="page-sub"><span class="font-semibold text-zinc-700">{{ filas().length }}</span> resultados</p>
   </div>
+  @if (gestiona) {
   <a routerLink="/reservas/nueva" class="btn-dark"><app-icon name="plus" size="w-4 h-4" /> Nueva reserva</a>
+  }
 </div>
 
 <div class="toolbar">

@@ -34,4 +34,22 @@ public class PkgSeguridadRepository {
         cache.put(clave, new Entrada(permitido, System.currentTimeMillis() + VIGENCIA_MS));
         return permitido;
     }
+
+    /** PKG_SEGURIDAD_ROLES.permisos(rol): acciones permitidas al rol (misma caché de 5 minutos) */
+    public java.util.List<String> permisos(String rol) {
+        if (rol == null) return java.util.List.of();
+        String clave = "PERMISOS|" + rol;
+        Lista l = listas.get(clave);
+        if (l != null && l.hasta() > System.currentTimeMillis()) return l.acciones();
+        String texto = jdbc.queryForObject("SELECT PKG_SEGURIDAD_ROLES.permisos(?) FROM dual", String.class, rol);
+        java.util.List<String> acciones = texto == null || texto.isBlank()
+                ? java.util.List.of() : java.util.List.of(texto.split(","));
+        listas.put(clave, new Lista(acciones, System.currentTimeMillis() + VIGENCIA_MS));
+        return acciones;
+    }
+
+    private record Lista(java.util.List<String> acciones, long hasta) {
+    }
+
+    private final Map<String, Lista> listas = new ConcurrentHashMap<>();
 }

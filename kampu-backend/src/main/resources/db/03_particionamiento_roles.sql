@@ -151,6 +151,13 @@ GRANT EXECUTE ON SP_REGISTRAR_CLIENTE_EXTERNO TO ROL_CLIENTE;
 -- Para dar un nivel a una cuenta de base de datos (ejemplo):
 --   GRANT ROL_VENTAS TO usuario_reportes_ventas;
 
+-- Particionar invalida los objetos que dependen de esas tablas (paquetes, triggers):
+-- se recompilan aquí para que queden VALID sin esperar a su primer uso.
+BEGIN
+    DBMS_UTILITY.COMPILE_SCHEMA(schema => USER, compile_all => FALSE);
+END;
+/
+
 -- =====================================================================
 -- 3. VERIFICACIÓN
 -- =====================================================================
@@ -164,3 +171,5 @@ SELECT grantee, COUNT(*) AS permisos
  WHERE grantee LIKE 'ROL\_%' ESCAPE '\'
  GROUP BY grantee
  ORDER BY grantee;
+
+SELECT object_type, object_name, status FROM USER_OBJECTS WHERE status <> 'VALID';

@@ -49,7 +49,7 @@ Todos están en `01_schema_v4.sql`, comentados.
 | Trigger | `TRG_VALIDAR_PAGO_PAQUETE` | Compound trigger en `PAGOS`: impide pagos en reservas anuladas/completadas (`-20201`) y que los aprobados superen el total (`-20202`). | Es la última barrera para el dinero: el portal permite que el cliente informe pagos y no se puede confiar solo en el frontend. |
 | Vista | `VW_PAQUETES_CLIENTE` | Paquetes del cliente **de la sesión** (`PKG_SEGURIDAD_ROLES.cliente_actual()`), con estado de ejecución, estado de pago, total, pagado, saldo y monto por validar. | El aislamiento entre clientes lo hace Oracle: aunque el backend tuviera un error, la vista nunca devuelve reservas ajenas. |
 | Vista | `VW_RESUMEN_PAQUETES_POR_ROL` | Resumen por salida (cupos, pasajeros, operaciones, guía, montos). Montos solo si el rol puede `VER_MONTOS`; el OPERADOR solo ve `POR_EMPEZAR`/`EN_CURSO`. | Un solo origen para el panel de los tres roles internos: la restricción la aplica la BD, no la pantalla. |
-| Paquete | `PKG_SEGURIDAD_ROLES` | Contexto de la sesión (`iniciar_sesion`, `usuario_actual`, `rol_actual`, `cliente_actual`), matriz `puede(rol, acción)`, `exigir`, y administración de accesos (`asignar_rol`, `revocar_acceso`, `restablecer_acceso`). | Centraliza el "quién puede qué". El backend le pregunta en cada petición y las vistas y triggers lo usan. |
+| Paquete | `PKG_SEGURIDAD_ROLES` | Contexto de la sesión (`iniciar_sesion`, `usuario_actual`, `rol_actual`, `cliente_actual`), catálogo de acciones, matriz `puede(rol, acción)`, `permisos(rol)` (lista para el frontend), `exigir`, y administración de accesos (`asignar_rol`, `revocar_acceso`, `restablecer_acceso`). | Centraliza el "quién puede qué". El backend le pregunta en cada petición y las vistas y triggers lo usan. |
 | Paquete | `PKG_GESTION_PAQUETES_CLIENTE` | `estado_ejecucion`, `pertenece`, `exigir_propietario` (`-20080`), `listar_paquetes` y `detalle_paquete` (REF CURSOR) e `iniciar_pago` (pago PENDIENTE con `registrado_por = CLIENTE`, errores `-20081`…`-20083`). | Todo lo que el cliente puede hacer pasa por aquí: lectura y un único tipo de escritura controlada. |
 
 > El script v4 original traía además `TRG_GESTION_CUPOS`, `TRG_AUTO_HISTORIAL_OP`, `V_PORTAL_CLIENTE`, `V_TABLERO_FIDS` y
@@ -60,8 +60,7 @@ Todos están en `01_schema_v4.sql`, comentados.
 
 | Acción | ADMIN | VENDEDOR | OPERADOR | CLIENTE |
 |---|:-:|:-:|:-:|:-:|
-| Usuarios (gestionar) / Auditoría | ✔ | — | — | — |
-| Ver usuarios | ✔ | ✔ | — | — |
+| Usuarios (ver / gestionar) · Auditoría | ✔ | — | — | — |
 | Clientes (ver / crear / editar) | ✔ | ✔ | — | — |
 | Reservas (ver / gestionar) | ✔ | ✔ | — | — |
 | Ver montos · Registrar/validar pagos | ✔ | ✔ | — | — |
@@ -71,6 +70,32 @@ Todos están en `01_schema_v4.sql`, comentados.
 | Operaciones de tráfico | ✔ | ver | ✔ | — |
 | Resumen de paquetes | ✔ | ✔ | ✔ (sin montos, sin terminados) | — |
 | Ver paquetes propios · Informar pago | — | — | — | ✔ |
+
+Una acción que no está en el catálogo se niega a todos (también a ADMIN). Cambiar un permiso es editar solo
+`PKG_SEGURIDAD_ROLES.puede`: el backend lo aplica en cada petición (caché de 5 min) y el frontend lo recibe en
+`permisos` al iniciar sesión y al recargar (`GET /auth/sesion`); menú, rutas y botones salen de esa lista, así que
+la interfaz nunca ofrece algo que el backend rechazaría con 403.
+
+## Auditoría (solo Administrador)
+
+Menú **Auditoría** (`/auditoria`, permiso `VER_AUDITORIA`). La tabla `AUDITORIA` guarda todo lo que pasa en el sistema:
+
+| Acción | Quién la registra | Qué guarda |
+|---|---|---|
+| Alta (`CREAR`) | `AuditoriaHibernateListener` (toda escritura JPA) | Resumen de los datos guardados |
+| Modificación (`ACTUALIZAR`) | El mismo listener · `TRG_AUDITORIA_ESTADO_PAQUETE` para estados de reserva | **Una fila por campo**: campo, valor anterior y valor nuevo |
+| Baja (`ELIMINAR`) | El listener | Los datos que tenía el registro |
+| Registro web (`REGISTRO`) | `SP_REGISTRAR_CLIENTE_EXTERNO` | Alta o activación de la cuenta |
+| Pago informado en el portal | `PortalClienteService` (el INSERT lo hace PL/SQL) | Reserva, monto, método y operación |
+| `LOGIN`, `LOGOUT`, `LOGIN_FALLIDO` | `AuthServiceImpl` | Usuario, rol y motivo del rechazo |
+
+Cada fila tiene usuario, rol, fecha y hora, entidad e id, y origen (`BD` = Oracle, `APP` = backend). Los cambios
+se registran en la **misma transacción** que el dato: si la operación falla, su registro también se deshace (los
+ingresos fallidos usan una transacción propia para que queden). Las contraseñas nunca se guardan (`******`).
+
+La pantalla permite filtrar por texto, rango de fechas (atajos Hoy / 7 días / 30 días), rol, acción, entidad y usuario;
+ver el **historial completo de un registro**; paginar en el servidor (50 por página) y **exportar a CSV** con los mismos filtros.
+Filtrar por rol aprovecha la partición de `AUDITORIA` por `rol_usuario`.
 
 ## Particionamiento y roles por nivel de usuario (`03_particionamiento_roles.sql`)
 
@@ -99,7 +124,10 @@ Requisitos: opción *Partitioning* (Enterprise, XE 18c+ o 23ai Free) y `CREATE R
 | Detalle (`/mi-cuenta/paquetes/:id`, nuevo) | — | Descripción, guía, pasajeros, barra de pago (pagado / por validar / saldo), historial de pagos e **Informar un pago** (monto ≤ saldo − por validar). Una reserva ajena muestra "no pertenece a tu cuenta". |
 | Cabecera del portal | — | Logo, **Volver al inicio**, Mis paquetes y Salir en todas las pantallas del cliente. |
 | Panel (`/dashboard`) | Igual para todos | Por rol: Admin/Ventas ven KPIs de dinero, reservas recientes y todos los estados; Operador ve por empezar / en curso, pasajeros y operaciones, **sin montos**. Botones *Confirmar salida* y *Marcar terminada*. |
-| Menú lateral | 8 opciones para todos | Operador: Panel, Salidas (solo lectura), Tráfico, Logística. Las rutas comerciales tienen guard. |
+| Menú lateral | 8 opciones para todos | Según `permisos`: Admin 9 (incluye **Auditoría**), Ventas 8, Operador 4 (Panel, Salidas solo lectura, Tráfico, Logística). Cada ruta tiene `permisoGuard`. |
+| Botones de gestión | Visibles para todos | Solo con el permiso: Logística `GESTIONAR_LOGISTICA` (Ventas solo consulta), Tráfico `GESTIONAR_OPERACIONES` (Ventas solo consulta), Salidas `GESTIONAR_CATALOGO` (Operador solo consulta), Clientes, Reservas y Pagos con sus permisos. |
+| Volver al inicio (panel) | — | En la barra superior (escritorio), la cabecera (móvil) y el menú lateral. Lleva a la página principal **sin cerrar sesión**; allí "Ir al panel" regresa. |
+| Auditoría (`/auditoria`, nuevo) | — | Bitácora con filtros, historial por registro, paginación y exportación CSV (solo Admin). |
 | Clientes / Pagos | — | Insignia **Cuenta web** en clientes registrados; insignia **Portal** en pagos informados por el cliente (para validarlos). |
 | Nueva reserva | Modo "Invitado (sin registro)" | Modo **Cliente nuevo** con documento: se crea el cliente (en v4 toda reserva tiene cliente) y luego puede activar su cuenta. |
 | Página de inicio | "Acceso Admin" | "Iniciar sesión" y "Registrarse" (o "Mis paquetes"/"Ir al panel" con sesión). |
@@ -123,13 +151,14 @@ los triggers saben quién está operando.
 | Panel | `TourStore.resumen` | `GET /resumen-paquetes` | `VW_RESUMEN_PAQUETES_POR_ROL` | ADMIN, VENDEDOR, OPERADOR |
 | Panel (botones) | `TourStore.marcarEjecucion` | `PATCH /salidas/{id}/ejecucion` `{estado: CONFIRMADA\|COMPLETADA}` | `TRG_AUDITORIA_ESTADO_PAQUETE` (reservas → COMPLETADA) | ADMIN, VENDEDOR, OPERADOR |
 | Validar pago | `TourStore` | `PATCH /pagos/{id}/resolver` | `TRG_VALIDAR_PAGO_PAQUETE`, `TRG_AUDITORIA_ESTADO_PAQUETE` | ADMIN, VENDEDOR |
-| Auditoría | — | `GET /auditoria` | `AUDITORIA` (particionada) | ADMIN |
+| Permisos de la sesión | `AuthService.refrescar` | `GET /auth/sesion` | `PKG_SEGURIDAD_ROLES.permisos` | todos con sesión |
+| Auditoría | `AuditoriaService` | `GET /auditoria?desde&hasta&rol&accion&entidad&entidadId&usuario&q&pagina&tamanio` · `GET /auditoria/filtros` · `GET /auditoria/exportar` (CSV) | `AUDITORIA` (particionada) | ADMIN |
 
 Resto de la API (bajo `/lp2_gp2/api/v1`, con token salvo lo indicado):
 
 | Recurso | Endpoints | Acción exigida |
 |---|---|---|
-| Auth | `POST /auth/login` · `POST /auth/registro` (públicos) · `POST /auth/logout` | — |
+| Auth | `POST /auth/login` · `POST /auth/registro` (públicos) · `GET /auth/sesion` · `POST /auth/logout` (login y registro devuelven `permisos`) | — |
 | Catálogo | `GET /paquetes[/{id}]`, `GET /salidas[/{id}]` (públicos) · `POST/PUT/DELETE /paquetes`, `/salidas` | `GESTIONAR_CATALOGO` |
 | Clientes | `GET /clientes`, `/clientes/buscar?q=`, `/clientes/{id}` · `POST/PUT/DELETE` | `VER_CLIENTES` / `GESTIONAR_CLIENTES` |
 | Reservas | `GET /reservas[/{id}]`, `/{id}/pasajeros`, `/{id}/boleta` · `POST /reservas`, `/{id}/boleta` · `PATCH /{id}/confirmar\|completar\|anular` | `VER_RESERVAS` / `GESTIONAR_RESERVAS` |
@@ -192,6 +221,10 @@ Las mismas reglas se aplican en ambos lados: `kampu-frontend/src/app/core/utils/
    4. `03_particionamiento_roles.sql` — particiones y roles por nivel de usuario.
 3. En SQL*Plus, para las tildes: `set NLS_LANG=AMERICAN_AMERICA.AL32UTF8` antes de entrar.
 
+> **Si ya tenías la v4 instalada:** esta versión cambia la tabla `AUDITORIA` (acción, detalle, origen) y
+> `PKG_SEGURIDAD_ROLES` (catálogo y `permisos`). Vuelve a ejecutar los cuatro scripts en orden; si no, el backend
+> no podrá guardar cambios (la auditoría es obligatoria en cada escritura) y avisará de ello.
+
 > Desde la v3 se reinstala con `00_reset.sql` → `01_schema_v4.sql` → `02_data.sql` → `03_particionamiento_roles.sql`.
 > Si necesitas conservar datos reales, expórtalos antes.
 
@@ -243,6 +276,11 @@ Abre http://localhost:4200. `npm start` usa `proxy.config.json`: `/api` → `htt
 `/lp2_gp2/images` → `http://localhost:8082`. **Orden de arranque:** Oracle → backend → frontend.
 
 ## 4. Pruebas realizadas
+
+- v4.1: Logística con datos para Admin, Ventas y Operador; recorrido de las 11 rutas del panel por rol sin ningún 403
+  ni error de JavaScript; Ventas y Operador sin botones de gestión fuera de sus permisos; por API, Ventas no crea
+  lugares, el Operador no crea clientes ni ve pagos (403); la bitácora registra alta, modificación campo por campo,
+  baja, login, logout e ingreso fallido; "Volver al inicio" conserva la sesión.
 
 - Oracle 23ai Free: los 4 scripts se ejecutan sin errores; los 8 objetos `VALID`; 12 particiones y 4 roles creados.
 - Backend con `ddl-auto=validate` (las entidades coinciden con el esquema) y pruebas de API por rol (200/401/403, errores de Oracle).

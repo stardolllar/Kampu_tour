@@ -24,9 +24,15 @@ public record ReservaDTO(
         String observaciones,
         String formaReembolso,
         Long usuarioAnulaId,
+        // Usuario que anuló (así Ventas lo ve sin necesitar permiso para listar usuarios)
+        String usuarioAnula,
         LocalDateTime boletaEnviadaEn
 ) {
     public static ReservaDTO desde(Reserva r, DetalleReserva d) {
+        return desde(r, d, null);
+    }
+
+    public static ReservaDTO desde(Reserva r, DetalleReserva d, String usuarioAnula) {
         BigDecimal pagado = r.getMontoPagado() == null ? BigDecimal.ZERO : r.getMontoPagado();
         BigDecimal total = r.getMontoTotal() == null ? BigDecimal.ZERO : r.getMontoTotal();
         return new ReservaDTO(r.getReservaId(), r.getClienteId(),
@@ -34,6 +40,6 @@ public record ReservaDTO(
                 d == null ? 0 : d.getCantidad(), d == null ? null : d.getPrecioUnitario(),
                 d == null ? BigDecimal.ZERO : d.getDescuento(), total, pagado, total.subtract(pagado).max(BigDecimal.ZERO),
                 r.getEstadoReserva(), r.getEstadoPago(), r.getObservaciones() == null ? "" : r.getObservaciones(),
-                r.getFormaReembolso(), r.getUsuarioAnulaId(), r.getBoletaEnviadaEn());
+                r.getFormaReembolso(), r.getUsuarioAnulaId(), usuarioAnula, r.getBoletaEnviadaEn());
     }
 }

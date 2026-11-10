@@ -8,6 +8,8 @@ public record SesionDTO(
         String nombre,
         String rol,
         String estado,
-        String token
+        String token,
+        // Acciones permitidas (PKG_SEGURIDAD_ROLES.permisos): el frontend arma menú, rutas y botones con esto
+        java.util.List<String> permisos
 ) {
 }

@@ -17,10 +17,12 @@
       </div>
     </div>
     <div class="flex flex-wrap gap-2">
+      @if (gestiona) {
       @if (r.estadoReserva === 'PENDIENTE') { <button type="button" class="btn-brand" (click)="confirmar()"><app-icon name="check" size="w-4 h-4" /> Confirmar</button> }
       @if (r.estadoReserva === 'CONFIRMADA') { <button type="button" class="btn-dark" (click)="completar()"><app-icon name="flag" size="w-4 h-4" /> Marcar completada</button> }
       @if (r.estadoReserva === 'PENDIENTE' || r.estadoReserva === 'CONFIRMADA') {
         <button type="button" class="btn-danger" (click)="anular()"><app-icon name="x" size="w-4 h-4" /> Anular</button>
+      }
       }
     </div>
   </div>
@@ -68,10 +70,12 @@
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn-light btn-sm" (click)="verBoleta()"><app-icon name="eye" size="w-3.5 h-3.5" /> Ver</button>
+          @if (gestiona) {
           <button type="button" class="btn-brand btn-sm" [disabled]="enviandoBoleta || !emailCliente()" (click)="enviarBoleta()" [title]="emailCliente() ? '' : 'El cliente no tiene correo'">
             @if (enviandoBoleta) { <span class="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"></span> Enviando… }
             @else { <app-icon name="mail" size="w-3.5 h-3.5" /> {{ r.boletaEnviadaEn ? 'Reenviar' : 'Enviar' }} por correo }
           </button>
+          }
         </div>
       </section>
       <section class="card overflow-hidden">
@@ -108,7 +112,7 @@
                   <td class="td text-right font-medium">{{ p.monto | currency:p.moneda + ' ' }}</td>
                   <td class="td"><app-badge [estado]="p.estadoTransaccion" /></td>
                   <td class="td text-right whitespace-nowrap">
-                    @if (p.estadoTransaccion === 'PENDIENTE') {
+                    @if (cobra && p.estadoTransaccion === 'PENDIENTE') {
                       <button type="button" class="icon-btn-success" title="Aprobar" (click)="resolver(p.pagoId, 'APROBADO')"><app-icon name="check" /></button>
                       <button type="button" class="icon-btn-danger" title="Rechazar" (click)="resolver(p.pagoId, 'RECHAZADO')"><app-icon name="x" /></button>
                     }

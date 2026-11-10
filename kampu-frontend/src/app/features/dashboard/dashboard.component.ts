@@ -23,7 +23,11 @@ export class DashboardComponent {
   auth = inject(AuthService);
   private alerts = inject(AlertService);
 
-  comercial = computed(() => this.store.puede('reservas'));
+  // Bloques comerciales (dinero y reservas) solo con VER_MONTOS / VER_RESERVAS
+  comercial = computed(() => this.auth.puede('VER_MONTOS') && this.auth.puede('VER_RESERVAS'));
+  nuevaReserva = computed(() => this.auth.puede('GESTIONAR_RESERVAS'));
+  ejecuta = computed(() => this.auth.puede('ACTUALIZAR_EJECUCION'));
+  traficoVisible = computed(() => this.auth.puede('VER_OPERACIONES'));
   filtro = signal<'TODOS' | EstadoEjecucion>('TODOS');
   procesando = signal<number | null>(null);
 
@@ -79,8 +83,8 @@ export class DashboardComponent {
 
   // Actualizar el estado de ejecución (ACTUALIZAR_EJECUCION: Admin, Ventas y Operador)
   // Confirmar: PROGRAMADA -> CONFIRMADA (exige transporte) · Terminar: EN_CURSO -> COMPLETADA
-  puedeIniciar(r: ResumenPaquete) { return r.estadoSalida === 'PROGRAMADA' && r.estadoEjecucion !== 'TERMINADO'; }
-  puedeTerminar(r: ResumenPaquete) { return r.estadoEjecucion === 'EN_CURSO' && r.estadoSalida !== 'COMPLETADA'; }
+  puedeIniciar(r: ResumenPaquete) { return this.ejecuta() && r.estadoSalida === 'PROGRAMADA' && r.estadoEjecucion !== 'TERMINADO'; }
+  puedeTerminar(r: ResumenPaquete) { return this.ejecuta() && r.estadoEjecucion === 'EN_CURSO' && r.estadoSalida !== 'COMPLETADA'; }
 
   async cambiar(r: ResumenPaquete, estado: 'CONFIRMADA' | 'COMPLETADA') {
     const texto = estado === 'COMPLETADA' ? 'Se marcará la salida como terminada.' : 'Se confirmará la salida (debe tener transporte asignado para todos los pasajeros).';

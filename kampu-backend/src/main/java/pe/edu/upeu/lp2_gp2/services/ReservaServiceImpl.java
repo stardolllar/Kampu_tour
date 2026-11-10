@@ -57,8 +57,11 @@ public class ReservaServiceImpl implements IReservaService {
     public List<ReservaDTO> listarTodo() {
         Map<Long, DetalleReserva> detalles = new HashMap<>();
         for (DetalleReserva d : detalleRepository.findAllByOrderByDetalleIdAsc()) detalles.putIfAbsent(d.getReservaId(), d);
+        Map<Long, String> usuarios = new HashMap<>();
+        usuarioRepository.findAll().forEach(u -> usuarios.put(u.getUsuarioId(), u.getUsername()));
         return reservaRepository.findAllByOrderByReservaIdAsc().stream()
-                .map(r -> ReservaDTO.desde(r, detalles.get(r.getReservaId()))).toList();
+                .map(r -> ReservaDTO.desde(r, detalles.get(r.getReservaId()),
+                        r.getUsuarioAnulaId() == null ? null : usuarios.get(r.getUsuarioAnulaId()))).toList();
     }
 
     @Override
@@ -187,6 +190,9 @@ public class ReservaServiceImpl implements IReservaService {
         if (!"PENDIENTE".equals(r.getEstadoReserva()) && !"CONFIRMADA".equals(r.getEstadoReserva())) {
             throw new BusinessException("Solo se anulan reservas pendientes o confirmadas.");
         }
+        // Quien anula es el usuario de la sesión (el id que manda el navegador no se usa: podría falsearse)
+        var sesion = pe.edu.upeu.lp2_gp2.seguridad.SesionActual.get();
+        if (sesion != null && sesion.usuarioId() != null) usuarioId = sesion.usuarioId();
         if (usuarioId == null) throw new BusinessException("Indica el usuario que anula la reserva (inicia sesión de nuevo).");
         if (!usuarioRepository.existsById(usuarioId)) throw new BusinessException("El usuario que anula no existe.");
         boolean hayReembolso = r.getMontoPagado() != null && r.getMontoPagado().signum() > 0;
@@ -236,7 +242,9 @@ public class ReservaServiceImpl implements IReservaService {
 
     private ReservaDTO dto(Reserva r) {
         List<DetalleReserva> detalles = detalleRepository.findByReservaIdOrderByDetalleIdAsc(r.getReservaId());
-        return ReservaDTO.desde(r, detalles.isEmpty() ? null : detalles.get(0));
+        String anula = r.getUsuarioAnulaId() == null ? null
+                : usuarioRepository.findById(r.getUsuarioAnulaId()).map(u -> u.getUsername()).orElse(null);
+        return ReservaDTO.desde(r, detalles.isEmpty() ? null : detalles.get(0), anula);
     }
 
     private Reserva obtener(Long id) {

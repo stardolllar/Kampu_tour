@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { Rol } from '../models';
+import { Permiso } from '../models';
 import { AuthService } from './auth.service';
 
 // Panel interno: solo personal (ADMIN / VENDEDOR / OPERADOR). El cliente va a su portal.
@@ -19,9 +19,10 @@ export const clienteGuard: CanActivateFn = () => {
   return auth.esCliente() ? true : router.parseUrl('/dashboard');
 };
 
-// Pantallas del panel restringidas por rol (data.roles). El backend vuelve a validar (PKG_SEGURIDAD_ROLES).
-export const rolGuard: CanActivateFn = (ruta) => {
+// Pantalla que exige un permiso (data.permiso). Mismo permiso que pide el backend
+// (SeguridadInterceptor -> PKG_SEGURIDAD_ROLES.puede), así no se muestra nada que daría 403.
+export const permisoGuard: CanActivateFn = (ruta) => {
   const auth = inject(AuthService);
-  const roles = (ruta.data?.['roles'] ?? []) as Rol[];
-  return !roles.length || roles.includes(auth.rol() as Rol) ? true : inject(Router).parseUrl('/dashboard');
+  const permiso = ruta.data?.['permiso'] as Permiso | undefined;
+  return !permiso || auth.puede(permiso) ? true : inject(Router).parseUrl('/dashboard');
 };

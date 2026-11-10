@@ -1,3 +1,4 @@
+import { AuthService } from '../../core/services/auth.service';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -17,6 +18,8 @@ import { IconComponent } from '../../shared/icon.component';
 export class PagosComponent {
   private store = inject(TourStore);
   private alerts = inject(AlertService);
+  // REGISTRAR_PAGO: registrar y validar pagos (Admin y Ventas)
+  gestiona = inject(AuthService).puede('REGISTRAR_PAGO');
 
   texto = signal('');
   estado = signal('');

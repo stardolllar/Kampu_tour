@@ -1,5 +1,7 @@
 package pe.edu.upeu.lp2_gp2.services;
 
+import pe.edu.upeu.lp2_gp2.auditoria.AuditoriaService;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,10 +34,12 @@ public class PortalClienteService {
     private final PersonalRepository personalRepository;
     private final PagoRepository pagoRepository;
     private final JdbcTemplate jdbc;
+    private final AuditoriaService auditoria;
 
     public PortalClienteService(VistaPaqueteClienteRepository vistaRepository, PaqueteTourRepository paqueteRepository,
                                 SalidaProgramadaRepository salidaRepository, PersonalRepository personalRepository,
-                                PagoRepository pagoRepository, JdbcTemplate jdbc) {
+                                PagoRepository pagoRepository, JdbcTemplate jdbc, AuditoriaService auditoria) {
+        this.auditoria = auditoria;
         this.vistaRepository = vistaRepository;
         this.paqueteRepository = paqueteRepository;
         this.salidaRepository = salidaRepository;
@@ -101,6 +105,10 @@ public class PortalClienteService {
             }
         });
         Pago p = pagoRepository.findById(pagoId).orElseThrow(() -> new BusinessException("No se pudo registrar el pago."));
+        // El INSERT lo hizo el paquete PL/SQL (no pasa por JPA): se audita aquí, en la misma transacción
+        auditoria.registrar("CREAR", "PAGO", pagoId, "Pago informado desde el portal: reserva " + reservaId + ", S/ "
+                + dto.monto().toPlainString() + " por " + dto.metodoPago().trim() + " (op. " + dto.codigoTransaccion().trim()
+                + "), queda PENDIENTE de validación");
         return PagoDTO.desde(p);
     }
 

@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { Observable } from 'rxjs';
-import { RegistroForm, Sesion } from '../models';
+import { Observable, tap } from 'rxjs';
+import { Permiso, RegistroForm, Sesion } from '../models';
 import { API } from '../utils/api';
 
 const KEY = 'tm4_session';
@@ -14,13 +14,19 @@ export class AuthService {
   autenticado = computed(() => this.sesion() !== null);
   esCliente = computed(() => this.sesion()?.rol === 'CLIENTE');
   rol = computed(() => this.sesion()?.rol ?? null);
+  // Permisos de la sesión (PKG_SEGURIDAD_ROLES.permisos): menú, rutas y botones dependen de esto
+  permisos = computed(() => new Set<string>(this.sesion()?.permisos ?? []));
+
+  puede(permiso: Permiso): boolean {
+    return this.permisos().has(permiso);
+  }
 
   private cargar(): Sesion | null {
     const texto = localStorage.getItem(KEY);
     if (!texto) return null;
     try {
       const s = JSON.parse(texto);
-      return s && s.token && s.rol ? s : null;
+      return s && s.token && s.rol ? { ...s, permisos: Array.isArray(s.permisos) ? s.permisos : [] } : null;
     } catch {
       return null;
     }
@@ -39,6 +45,11 @@ export class AuthService {
   guardarSesion(s: Sesion) {
     this.sesion.set(s);
     localStorage.setItem(KEY, JSON.stringify(s));
+  }
+
+  // Vuelve a pedir la sesión al backend (permisos al día; sesiones guardadas por versiones anteriores)
+  refrescar(): Observable<Sesion> {
+    return this.http.get<Sesion>(`${API}/auth/sesion`).pipe(tap(s => this.guardarSesion(s)));
   }
 
   // Ruta de inicio según el rol

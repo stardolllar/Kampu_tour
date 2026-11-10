@@ -4,9 +4,9 @@
     <h1 class="h1">{{ saludo() }}, {{ auth.usuario()?.username }}</h1>
     <p class="page-sub">{{ comercial() ? 'Esto es lo que está pasando hoy en tu agencia.' : 'Salidas por empezar y en curso que debes atender.' }}</p>
   </div>
-  @if (comercial()) {
+  @if (nuevaReserva()) {
     <a routerLink="/reservas/nueva" class="btn-dark"><app-icon name="plus" size="w-4 h-4" /> Nueva reserva</a>
-  } @else {
+  } @else if (traficoVisible()) {
     <a routerLink="/operaciones" class="btn-dark"><app-icon name="truck" size="w-4 h-4" /> Tráfico</a>
   }
 </div>

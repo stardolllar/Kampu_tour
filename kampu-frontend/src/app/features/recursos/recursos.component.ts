@@ -58,13 +58,17 @@ export class RecursosComponent {
   abierto = signal(false);
   editId: number | null = null;
 
+  // Debe declararse ANTES de los formularios: personaVacia() y vehiculoVacio() lo usan al inicializarse.
+  // (Declarado después, el componente fallaba con "this.propio is not a function" y Logística quedaba en blanco.)
+  propio = computed(() => this.store.proveedores().find(p => p.esPropio));
+
   proveedor: ProveedorForm = this.proveedorVacio();
   persona: PersonalForm = this.personaVacia();
   vehiculo: VehiculoForm = this.vehiculoVacio();
   lugar: LugarForm = this.lugarVacio();
 
-  // Solo ADMIN y OPERADOR gestionan la logística; Ventas la consulta
-  puedeEditar = computed(() => ['ADMIN', 'OPERADOR'].includes(this.auth.rol() ?? ''));
+  // GESTIONAR_LOGISTICA (PKG_SEGURIDAD_ROLES): Admin y Operador; Ventas solo consulta (VER_LOGISTICA)
+  puedeEditar = computed(() => this.auth.puede('GESTIONAR_LOGISTICA'));
 
   v = new FormValidacion(() => {
     switch (this.tab()) {
@@ -137,7 +141,6 @@ export class RecursosComponent {
     return grupos;
   });
   proveedoresActivos = computed(() => this.store.proveedores().filter(p => p.estado !== 'INACTIVO'));
-  propio = computed(() => this.store.proveedores().find(p => p.esPropio));
 
   get actual() { return this.tabs.find(t => t.id === this.tab())!; }
 

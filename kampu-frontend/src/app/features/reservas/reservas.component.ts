@@ -1,3 +1,4 @@
+import { AuthService } from '../../core/services/auth.service';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -15,6 +16,7 @@ import { IconComponent } from '../../shared/icon.component';
 export class ReservasComponent {
   private store = inject(TourStore);
   private route = inject(ActivatedRoute);
+  gestiona = inject(AuthService).puede('GESTIONAR_RESERVAS');
 
   texto = signal('');
   estado = signal('');

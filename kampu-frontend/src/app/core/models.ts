@@ -206,6 +206,7 @@ export interface Reserva {
   observaciones: string;
   formaReembolso?: string;
   usuarioAnulaId?: number;
+  usuarioAnula?: string | null;
   boletaEnviadaEn?: string | null;
 }
 
@@ -397,4 +398,49 @@ export interface Sesion {
   rol: Rol;
   estado: string;
   token: string;
+  // Acciones permitidas por PKG_SEGURIDAD_ROLES (VER_LOGISTICA, GESTIONAR_RESERVAS, ...)
+  permisos: Permiso[];
+}
+
+export type Permiso =
+  | 'VER_USUARIOS' | 'GESTIONAR_USUARIOS' | 'VER_AUDITORIA'
+  | 'VER_CLIENTES' | 'GESTIONAR_CLIENTES' | 'VER_RESERVAS' | 'GESTIONAR_RESERVAS' | 'VER_MONTOS' | 'REGISTRAR_PAGO'
+  | 'GESTIONAR_CATALOGO' | 'ACTUALIZAR_EJECUCION' | 'VER_RESUMEN'
+  | 'VER_LOGISTICA' | 'GESTIONAR_LOGISTICA' | 'VER_OPERACIONES' | 'GESTIONAR_OPERACIONES'
+  | 'VER_PAQUETES_PROPIOS' | 'INFORMAR_PAGO';
+
+// ---------- Auditoría (solo ADMIN) ----------
+export type AccionAuditoria = 'CREAR' | 'ACTUALIZAR' | 'ELIMINAR' | 'REGISTRO' | 'LOGIN' | 'LOGOUT' | 'LOGIN_FALLIDO';
+
+export interface RegistroAuditoria {
+  auditoriaId: number;
+  accion: AccionAuditoria;
+  entidad: string;
+  entidadId: number | null;
+  campo: string | null;
+  valorAnterior: string | null;
+  valorNuevo: string | null;
+  detalle: string | null;
+  usuario: string;
+  rolUsuario: Rol | 'SISTEMA';
+  origen: 'BD' | 'APP';
+  fecha: string;
+}
+
+export interface FiltroAuditoria {
+  desde: string;
+  hasta: string;
+  rol: string;
+  accion: string;
+  entidad: string;
+  usuario: string;
+  q: string;
+  entidadId?: number | null;
+}
+
+export interface Pagina<T> {
+  contenido: T[];
+  total: number;
+  pagina: number;
+  tamanio: number;
 }

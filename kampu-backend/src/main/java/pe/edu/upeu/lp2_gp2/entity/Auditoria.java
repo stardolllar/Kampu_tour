@@ -4,7 +4,10 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.Immutable;
 
-// Tabla AUDITORIA (la llenan TRG_AUDITORIA_ESTADO_PAQUETE y SP_REGISTRAR_CLIENTE_EXTERNO)
+// Bitácora AUDITORIA (solo lectura desde JPA). La escriben:
+//   origen BD : TRG_AUDITORIA_ESTADO_PAQUETE y SP_REGISTRAR_CLIENTE_EXTERNO
+//   origen APP: auditoria.AuditoriaHibernateListener y auditoria.AuditoriaService
+// Las longitudes deben coincidir con la tabla: rol_usuario es clave de partición (ORA-14060 si Hibernate intenta cambiarla).
 @Entity
 @Immutable
 @Table(name = "AUDITORIA")
@@ -13,27 +16,35 @@ public class Auditoria {
     @Column(name = "auditoria_id")
     private Long auditoriaId;
 
+    @Column(name = "accion", length = 20)
+    private String accion;
+
     @Column(name = "entidad", length = 30)
     private String entidad;
 
     @Column(name = "entidad_id")
     private Long entidadId;
 
-    @Column(name = "campo", length = 30)
+    @Column(name = "campo", length = 40)
     private String campo;
 
-    @Column(name = "valor_anterior", length = 100)
+    @Column(name = "valor_anterior", length = 400)
     private String valorAnterior;
 
-    @Column(name = "valor_nuevo", length = 100)
+    @Column(name = "valor_nuevo", length = 400)
     private String valorNuevo;
+
+    @Column(name = "detalle", length = 1000)
+    private String detalle;
 
     @Column(name = "usuario", length = 100)
     private String usuario;
 
-    // Clave de partición de AUDITORIA (03_particionamiento_roles.sql): Oracle no deja cambiar su tamaño (ORA-14060)
     @Column(name = "rol_usuario", length = 20)
     private String rolUsuario;
+
+    @Column(name = "origen", length = 10)
+    private String origen;
 
     @Column(name = "fecha")
     private LocalDateTime fecha;
@@ -41,75 +52,16 @@ public class Auditoria {
     public Auditoria() {
     }
 
-    public Long getAuditoriaId() {
-        return auditoriaId;
-    }
-
-    public void setAuditoriaId(Long auditoriaId) {
-        this.auditoriaId = auditoriaId;
-    }
-
-    public String getEntidad() {
-        return entidad;
-    }
-
-    public void setEntidad(String entidad) {
-        this.entidad = entidad;
-    }
-
-    public Long getEntidadId() {
-        return entidadId;
-    }
-
-    public void setEntidadId(Long entidadId) {
-        this.entidadId = entidadId;
-    }
-
-    public String getCampo() {
-        return campo;
-    }
-
-    public void setCampo(String campo) {
-        this.campo = campo;
-    }
-
-    public String getValorAnterior() {
-        return valorAnterior;
-    }
-
-    public void setValorAnterior(String valorAnterior) {
-        this.valorAnterior = valorAnterior;
-    }
-
-    public String getValorNuevo() {
-        return valorNuevo;
-    }
-
-    public void setValorNuevo(String valorNuevo) {
-        this.valorNuevo = valorNuevo;
-    }
-
-    public String getUsuario() {
-        return usuario;
-    }
-
-    public void setUsuario(String usuario) {
-        this.usuario = usuario;
-    }
-
-    public String getRolUsuario() {
-        return rolUsuario;
-    }
-
-    public void setRolUsuario(String rolUsuario) {
-        this.rolUsuario = rolUsuario;
-    }
-
-    public LocalDateTime getFecha() {
-        return fecha;
-    }
-
-    public void setFecha(LocalDateTime fecha) {
-        this.fecha = fecha;
-    }
+    public Long getAuditoriaId() { return auditoriaId; }
+    public String getAccion() { return accion; }
+    public String getEntidad() { return entidad; }
+    public Long getEntidadId() { return entidadId; }
+    public String getCampo() { return campo; }
+    public String getValorAnterior() { return valorAnterior; }
+    public String getValorNuevo() { return valorNuevo; }
+    public String getDetalle() { return detalle; }
+    public String getUsuario() { return usuario; }
+    public String getRolUsuario() { return rolUsuario; }
+    public String getOrigen() { return origen; }
+    public LocalDateTime getFecha() { return fecha; }
 }

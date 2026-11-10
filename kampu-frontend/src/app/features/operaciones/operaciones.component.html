@@ -4,7 +4,9 @@
     <h1 class="h1">Operaciones de transporte</h1>
     <p class="page-sub">Cada tramo de una salida (aeropuerto → hotel, hotel → atractivo…) con su vehículo, conductor y estado.</p>
   </div>
+  @if (gestiona) {
   <button type="button" class="btn-dark" (click)="nueva()"><app-icon name="plus" size="w-4 h-4" /> Nueva operación</button>
+  }
 </div>
 
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -84,10 +86,10 @@
             </td>
             <td class="td text-right whitespace-nowrap">
               <div class="actions">
-                @if (f.op.estadoActual === 'PROGRAMADO') {
+                @if (gestiona && f.op.estadoActual === 'PROGRAMADO') {
                   <button type="button" class="btn-brand !h-8 !px-3 !text-xs" (click)="abrirAsignar(f.op)"><app-icon name="sparkles" size="w-3.5 h-3.5" /> Asignar</button>
                 }
-                @if (!esFinal(f.op)) {
+                @if (gestiona && !esFinal(f.op)) {
                   <button type="button" class="icon-btn" title="Cambiar estado" (click)="abrirEstado(f.op)"><app-icon name="chevron-right" size="w-[18px] h-[18px]" /></button>
                   <button type="button" class="icon-btn" title="Editar" (click)="editar(f.op)"><app-icon name="edit" size="w-[18px] h-[18px]" /></button>
                 }

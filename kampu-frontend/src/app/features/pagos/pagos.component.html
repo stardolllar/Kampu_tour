@@ -47,8 +47,10 @@
             <td class="td text-right whitespace-nowrap">
               @if (f.pago.estadoTransaccion === 'PENDIENTE') {
                 <div class="actions">
+                  @if (gestiona) {
                   <button type="button" class="icon-btn-success" title="Aprobar" (click)="resolver(f.pago.pagoId, 'APROBADO')"><app-icon name="check" size="w-[18px] h-[18px]" /></button>
                   <button type="button" class="icon-btn-danger" title="Rechazar" (click)="resolver(f.pago.pagoId, 'RECHAZADO')"><app-icon name="x" size="w-[18px] h-[18px]" /></button>
+                  }
                 </div>
               }
             </td>

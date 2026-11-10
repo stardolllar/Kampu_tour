@@ -15,10 +15,11 @@ import { OperacionesComponent } from './features/operaciones/operaciones.compone
 import { RegistroComponent } from './features/portal/registro.component';
 import { MisPaquetesComponent } from './features/portal/mis-paquetes.component';
 import { PaqueteClienteComponent } from './features/portal/paquete-cliente.component';
-import { clienteGuard, personalGuard, rolGuard } from './core/services/guards';
+import { clienteGuard, permisoGuard, personalGuard } from './core/services/guards';
+import { AuditoriaComponent } from './features/auditoria/auditoria.component';
 
-// Roles por pantalla (espejo de PKG_SEGURIDAD_ROLES.puede; el backend es quien decide)
-const COMERCIAL = { roles: ['ADMIN', 'VENDEDOR'] };
+// Permiso que exige cada pantalla (PKG_SEGURIDAD_ROLES; el backend vuelve a validarlo en cada petición)
+const permiso = (p: string) => ({ permiso: p });
 
 export const routes: Routes = [
   { path: '', component: LandingComponent, pathMatch: 'full' },
@@ -31,18 +32,19 @@ export const routes: Routes = [
     path: '',
     component: ShellComponent,
     canActivate: [personalGuard],
-    canActivateChild: [rolGuard],
+    canActivateChild: [permisoGuard],
     children: [
       { path: 'dashboard', component: DashboardComponent },
-      { path: 'reservas', component: ReservasComponent, data: COMERCIAL },
-      { path: 'reservas/nueva', component: ReservaNuevaComponent, data: COMERCIAL },
-      { path: 'reservas/:id', component: ReservaDetalleComponent, data: COMERCIAL },
-      { path: 'salidas', component: SalidasComponent },
-      { path: 'paquetes', component: PaquetesComponent, data: COMERCIAL },
-      { path: 'pagos', component: PagosComponent, data: COMERCIAL },
-      { path: 'clientes', component: ClientesComponent, data: COMERCIAL },
-      { path: 'operaciones', component: OperacionesComponent },
-      { path: 'recursos', component: RecursosComponent }
+      { path: 'reservas', component: ReservasComponent, data: permiso('VER_RESERVAS') },
+      { path: 'reservas/nueva', component: ReservaNuevaComponent, data: permiso('GESTIONAR_RESERVAS') },
+      { path: 'reservas/:id', component: ReservaDetalleComponent, data: permiso('VER_RESERVAS') },
+      { path: 'salidas', component: SalidasComponent, data: permiso('VER_RESUMEN') },
+      { path: 'paquetes', component: PaquetesComponent, data: permiso('GESTIONAR_CATALOGO') },
+      { path: 'pagos', component: PagosComponent, data: permiso('VER_MONTOS') },
+      { path: 'clientes', component: ClientesComponent, data: permiso('VER_CLIENTES') },
+      { path: 'operaciones', component: OperacionesComponent, data: permiso('VER_OPERACIONES') },
+      { path: 'recursos', component: RecursosComponent, data: permiso('VER_LOGISTICA') },
+      { path: 'auditoria', component: AuditoriaComponent, data: permiso('VER_AUDITORIA') }
     ]
   },
   { path: '**', redirectTo: '' }

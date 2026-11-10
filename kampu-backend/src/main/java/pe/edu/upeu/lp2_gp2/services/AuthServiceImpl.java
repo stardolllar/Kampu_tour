@@ -1,5 +1,10 @@
 package pe.edu.upeu.lp2_gp2.services;
 
+import pe.edu.upeu.lp2_gp2.auditoria.AuditoriaService;
+import pe.edu.upeu.lp2_gp2.auditoria.RegistroAuditoria;
+import pe.edu.upeu.lp2_gp2.exception.NoAutenticadoException;
+import pe.edu.upeu.lp2_gp2.repository.PkgSeguridadRepository;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,20 +35,42 @@ public class AuthServiceImpl implements IAuthService {
     private final ClienteRepository clienteRepository;
     private final TokenService tokens;
     private final JdbcTemplate jdbc;
+    private final PkgSeguridadRepository seguridad;
+    private final AuditoriaService auditoria;
     private final BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
 
     public AuthServiceImpl(UsuarioSistemaRepository usuarioRepository, ClienteRepository clienteRepository,
-                           TokenService tokens, JdbcTemplate jdbc) {
+                           TokenService tokens, JdbcTemplate jdbc, PkgSeguridadRepository seguridad,
+                           AuditoriaService auditoria) {
         this.usuarioRepository = usuarioRepository;
         this.clienteRepository = clienteRepository;
         this.tokens = tokens;
         this.jdbc = jdbc;
+        this.seguridad = seguridad;
+        this.auditoria = auditoria;
     }
 
+    // Inicio de sesión auditado: LOGIN si entra, LOGIN_FALLIDO (con el motivo) si no.
+    // Se registran en transacción propia: el login es de solo lectura y el fallido termina en excepción.
     @Override
     @Transactional(readOnly = true)
     public SesionDTO login(LoginRequestDTO dto) {
         String id = dto.username().trim();
+        try {
+            SesionDTO s = autenticar(id, dto.password());
+            auditoria.registrarIndependiente(new RegistroAuditoria("LOGIN", "SESION",
+                    s.usuarioId() != null ? s.usuarioId() : s.clienteId(), null, null, null,
+                    "Inicio de sesión (" + s.rol() + ")", s.username(), s.rol()));
+            return s;
+        } catch (BusinessException ex) {
+            auditoria.registrarIndependiente(new RegistroAuditoria("LOGIN_FALLIDO", "SESION", null, null, null, null,
+                    ex.getMessage(), id, null));
+            throw ex;
+        }
+    }
+
+    private SesionDTO autenticar(String id, String password) {
+        LoginRequestDTO dto = new LoginRequestDTO(id, password);
         // 1) Personal interno
         Optional<UsuarioSistema> usuario = usuarioRepository.findByUsernameIgnoreCase(id);
         if (usuario.isPresent()) {
@@ -100,7 +127,20 @@ public class AuthServiceImpl implements IAuthService {
 
     @Override
     public void logout(String token) {
+        SesionUsuario s = tokens.obtener(token);
         tokens.eliminar(token);
+        if (s != null) {
+            auditoria.registrarIndependiente(new RegistroAuditoria("LOGOUT", "SESION",
+                    s.usuarioId() != null ? s.usuarioId() : s.clienteId(), null, null, null,
+                    "Cierre de sesión", s.username(), s.rol()));
+        }
+    }
+
+    @Override
+    public SesionDTO sesion(String token) {
+        SesionUsuario s = tokens.obtener(token);
+        if (s == null) throw new NoAutenticadoException("Tu sesión venció. Vuelve a iniciar sesión.");
+        return dto(s, "ACTIVO");
     }
 
     // Personal interno: hash BCrypt o (datos de demostración) texto plano
@@ -110,6 +150,7 @@ public class AuthServiceImpl implements IAuthService {
     }
 
     private SesionDTO dto(SesionUsuario s, String estado) {
-        return new SesionDTO(s.usuarioId(), s.clienteId(), s.username(), s.nombre(), s.rol(), estado, s.token());
+        return new SesionDTO(s.usuarioId(), s.clienteId(), s.username(), s.nombre(), s.rol(), estado, s.token(),
+                seguridad.permisos(s.rol()));
     }
 }

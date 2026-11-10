@@ -4,29 +4,29 @@ import { Observable } from 'rxjs';
 import {
   Cliente, ClienteForm, ContactoReserva, EstadoOperacion, EstadoOperacionInfo, EstadoTransaccion, EstimacionDuracion,
   HistorialOperacion, Lugar, LugarForm, Moneda, Operacion, OperacionForm, PaqueteForm, PaqueteTour, Pago, PasajeroDraft,
-  PasajeroReserva, Personal, PersonalForm, Proveedor, ProveedorForm, RecursoCandidato, Reserva, ResumenPaquete, Rol,
+  PasajeroReserva, Permiso, Personal, PersonalForm, Proveedor, ProveedorForm, RecursoCandidato, Reserva, ResumenPaquete, Rol,
   SalidaForm, SalidaProgramada, Sesion, Vehiculo, VehiculoForm
 } from '../models';
 import { redondear } from '../utils/moneda';
 import { API, mensajeError } from '../utils/api';
 import { AuthService } from './auth.service';
 
-// Qué listas carga cada rol (el backend igual valida con PKG_SEGURIDAD_ROLES)
-const LISTAS: { [lista: string]: Rol[] } = {
-  usuarios: ['ADMIN', 'VENDEDOR'],
-  paquetes: ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  salidas: ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  proveedores: ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  personal: ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  vehiculos: ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  lugares: ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  operaciones: ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  'operaciones/estados': ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  'resumen-paquetes': ['ADMIN', 'VENDEDOR', 'OPERADOR'],
-  clientes: ['ADMIN', 'VENDEDOR'],
-  reservas: ['ADMIN', 'VENDEDOR'],
-  pasajeros: ['ADMIN', 'VENDEDOR'],
-  pagos: ['ADMIN', 'VENDEDOR']
+// Permiso que exige cada lista (mismo mapeo que SeguridadInterceptor en el backend).
+// null = catálogo público. Los permisos de la sesión vienen de PKG_SEGURIDAD_ROLES.permisos.
+const LISTAS: { [lista: string]: Permiso | null } = {
+  paquetes: null,
+  salidas: null,
+  proveedores: 'VER_LOGISTICA',
+  personal: 'VER_LOGISTICA',
+  vehiculos: 'VER_LOGISTICA',
+  lugares: 'VER_LOGISTICA',
+  operaciones: 'VER_OPERACIONES',
+  'operaciones/estados': 'VER_OPERACIONES',
+  'resumen-paquetes': 'VER_RESUMEN',
+  clientes: 'VER_CLIENTES',
+  reservas: 'VER_RESERVAS',
+  pasajeros: 'VER_RESERVAS',
+  pagos: 'VER_MONTOS'
 };
 
 @Injectable({ providedIn: 'root' })
@@ -34,7 +34,6 @@ export class TourStore {
   private http = inject(HttpClient);
   private auth = inject(AuthService);
 
-  usuarios = signal<Sesion[]>([]);
   paquetes = signal<PaqueteTour[]>([]);
   // Proveedores (Kampu Tours propio + terceros), su personal y su flota
   proveedores = signal<Proveedor[]>([]);
@@ -69,9 +68,11 @@ export class TourStore {
     return mensajeError(e);
   }
 
+  // ¿La sesión puede leer esta lista?
   puede(lista: string): boolean {
-    const rol = this.auth.rol();
-    return !!rol && (LISTAS[lista] ?? []).includes(rol);
+    if (!(lista in LISTAS)) return false;
+    const permiso = LISTAS[lista];
+    return this.auth.autenticado() && (permiso === null || this.auth.puede(permiso));
   }
 
   cargar(forzar = false, alTerminar?: (error: string) => void) {
@@ -82,7 +83,7 @@ export class TourStore {
     }
     if (this.cargando) return;
     const tareas: [string, WritableSignal<any[]>][] = [
-      ['usuarios', this.usuarios], ['paquetes', this.paquetes], ['salidas', this.salidas],
+      ['paquetes', this.paquetes], ['salidas', this.salidas],
       ['proveedores', this.proveedores], ['personal', this.personal], ['vehiculos', this.vehiculos],
       ['lugares', this.lugares], ['operaciones', this.operaciones], ['operaciones/estados', this.estadosOperacion],
       ['resumen-paquetes', this.resumen], ['clientes', this.clientes], ['reservas', this.reservas],
@@ -114,7 +115,7 @@ export class TourStore {
   limpiar() {
     this.cargado.set(false);
     this.cargando = false;
-    for (const s of [this.usuarios, this.paquetes, this.proveedores, this.personal, this.vehiculos, this.lugares,
+    for (const s of [this.paquetes, this.proveedores, this.personal, this.vehiculos, this.lugares,
       this.operaciones, this.estadosOperacion, this.clientes, this.salidas, this.reservas, this.pasajeros, this.pagos,
       this.resumen] as WritableSignal<unknown[]>[]) {
       s.set([]);
@@ -128,7 +129,6 @@ export class TourStore {
       error: e => { if (contar) this.terminoTabla(e); else this.error(e); }
     });
   }
-  cargarUsuarios() { this.cargarLista('usuarios', this.usuarios, false); }
   cargarPaquetes() { this.cargarLista('paquetes', this.paquetes, false); }
   cargarProveedores() { this.cargarLista('proveedores', this.proveedores, false); }
   cargarPersonal() { this.cargarLista('personal', this.personal, false); }
@@ -166,10 +166,6 @@ export class TourStore {
   pasajerosDe(reservaId: number) { return this.pasajeros().filter(p => p.reservaId === reservaId); }
   pagosDe(reservaId: number) { return this.pagos().filter(p => p.reservaId === reservaId); }
   salidasDe(paqueteId: number) { return this.salidas().filter(s => s.paqueteId === paqueteId); }
-  usernameDe(id?: number | null): string {
-    const u = this.usuarios().find(x => x.usuarioId === id);
-    return u ? u.username : 'usuario #' + id;
-  }
 
   codigoReserva(id: number) { return 'R-' + String(id).padStart(4, '0'); }
   saldo(r: Reserva): number {

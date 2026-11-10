@@ -1,3 +1,4 @@
+import { AuthService } from '../../core/services/auth.service';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TourStore } from '../../core/services/tour-store.service';
@@ -20,6 +21,8 @@ import { errorTelefonoPais } from '../../core/utils/paises';
 export class ClientesComponent {
   store = inject(TourStore);
   private alerts = inject(AlertService);
+  // GESTIONAR_CLIENTES (Admin y Ventas)
+  gestiona = inject(AuthService).puede('GESTIONAR_CLIENTES');
 
   tipos: TipoDocumentoCliente[] = ['DNI', 'CE', 'PASAPORTE', 'RUC'];
   texto = signal('');

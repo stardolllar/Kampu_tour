@@ -1,3 +1,4 @@
+import { AuthService } from '../../core/services/auth.service';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -22,6 +23,10 @@ import { FormValidacion, V } from '../../core/utils/validacion';
 export class ReservaDetalleComponent {
   store = inject(TourStore);
   private alerts = inject(AlertService);
+  private auth = inject(AuthService);
+  // GESTIONAR_RESERVAS (confirmar, completar, anular, boleta) y REGISTRAR_PAGO (registrar/validar pagos)
+  gestiona = this.auth.puede('GESTIONAR_RESERVAS');
+  cobra = this.auth.puede('REGISTRAR_PAGO');
   private router = inject(Router);
   private id = Number(inject(ActivatedRoute).snapshot.paramMap.get('id'));
 
@@ -61,10 +66,11 @@ export class ReservaDetalleComponent {
   saldo = computed(() => { const r = this.reserva(); return r ? this.store.saldo(r) : 0; });
   avance = computed(() => { const r = this.reserva(); return r && r.montoTotal ? Math.min(100, r.montoPagado * 100 / r.montoTotal) : 0; });
   puedePagar = computed(() => {
+    if (!this.cobra) return false;
     const r = this.reserva();
     return !!r && (r.estadoReserva === 'PENDIENTE' || r.estadoReserva === 'CONFIRMADA') && this.saldo() > 0;
   });
-  usuarioAnula = computed(() => this.store.usernameDe(this.reserva()?.usuarioAnulaId));
+  usuarioAnula = computed(() => this.reserva()?.usuarioAnula ?? 'usuario #' + this.reserva()?.usuarioAnulaId);
 
   constructor() {
     this.store.cargar(false, error => {
