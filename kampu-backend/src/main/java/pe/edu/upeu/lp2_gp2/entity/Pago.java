@@ -1,11 +1,12 @@
 package pe.edu.upeu.lp2_gp2.entity;
 
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
+@DynamicUpdate
 @Table(name = "PAGOS")
 public class Pago {
     @Id
@@ -21,6 +22,14 @@ public class Pago {
 
     @Column(name = "moneda", length = 10)
     private String moneda;
+
+    // Soles por unidad de la moneda (1 para PEN)
+    @Column(name = "tipo_cambio", nullable = false, precision = 8, scale = 4)
+    private BigDecimal tipoCambio;
+
+    // Columna virtual: ROUND(monto * tipo_cambio, 2)
+    @Column(name = "monto_pen", insertable = false, updatable = false)
+    private BigDecimal montoPen;
 
     @Column(name = "metodo_pago", length = 50)
     private String metodoPago;
@@ -67,6 +76,22 @@ public class Pago {
 
     public void setMoneda(String moneda) {
         this.moneda = moneda;
+    }
+
+    public BigDecimal getTipoCambio() {
+        return tipoCambio;
+    }
+
+    public void setTipoCambio(BigDecimal tipoCambio) {
+        this.tipoCambio = tipoCambio;
+    }
+
+    public BigDecimal getMontoPen() {
+        return montoPen;
+    }
+
+    public void setMontoPen(BigDecimal montoPen) {
+        this.montoPen = montoPen;
     }
 
     public String getMetodoPago() {

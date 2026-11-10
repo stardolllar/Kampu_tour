@@ -13,7 +13,7 @@ import java.util.Optional;
 
 @Repository
 public interface ClienteRepository extends JpaRepository<Cliente, Long> {
-    Optional<Cliente> findByNumeroDocumento(String numeroDocumento);
+    Optional<Cliente> findByTipoDocumentoAndNumeroDocumentoIgnoreCase(String tipoDocumento, String numeroDocumento);
 
     List<Cliente> findAllByOrderByClienteIdAsc();
 

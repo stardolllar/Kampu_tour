@@ -1,10 +1,15 @@
 package pe.edu.upeu.lp2_gp2.entity;
 
 import jakarta.persistence.*;
-
 import java.time.LocalDate;
+import org.hibernate.annotations.DynamicUpdate;
 
+// trg_salida_biu calcula fecha_fin (si va nula) y cupos_disponibles;
+// trg_detalle_reserva_biud y trg_reserva_estado_bu mantienen los cupos.
+// @DynamicUpdate: el UPDATE solo lleva las columnas cambiadas (así los triggers
+// "UPDATE OF ..." solo se disparan cuando corresponde).
 @Entity
+@DynamicUpdate
 @Table(name = "SALIDAS_PROGRAMADAS")
 public class SalidaProgramada {
     @Id
@@ -18,23 +23,18 @@ public class SalidaProgramada {
     @Column(name = "fecha_inicio", nullable = false)
     private LocalDate fechaInicio;
 
-    @Column(name = "fecha_fin", nullable = false)
+    @Column(name = "fecha_fin")
     private LocalDate fechaFin;
 
     @Column(name = "cupos_maximos", nullable = false)
     private Integer cuposMaximos;
 
-    @Column(name = "cupos_disponibles", nullable = false)
+    // Lo mantienen los triggers: Hibernate nunca lo escribe
+    @Column(name = "cupos_disponibles", insertable = false, updatable = false)
     private Integer cuposDisponibles;
 
     @Column(name = "guia_id")
     private Long guiaId;
-
-    @Column(name = "transporte_id")
-    private Long transporteId;
-
-    @Column(name = "chofer_id")
-    private Long choferId;
 
     @Column(name = "estado", length = 20)
     private String estado;
@@ -96,22 +96,6 @@ public class SalidaProgramada {
 
     public void setGuiaId(Long guiaId) {
         this.guiaId = guiaId;
-    }
-
-    public Long getTransporteId() {
-        return transporteId;
-    }
-
-    public void setTransporteId(Long transporteId) {
-        this.transporteId = transporteId;
-    }
-
-    public Long getChoferId() {
-        return choferId;
-    }
-
-    public void setChoferId(Long choferId) {
-        this.choferId = choferId;
     }
 
     public String getEstado() {

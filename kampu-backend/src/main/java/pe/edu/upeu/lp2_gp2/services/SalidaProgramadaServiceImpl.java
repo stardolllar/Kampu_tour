@@ -1,49 +1,64 @@
 package pe.edu.upeu.lp2_gp2.services;
 
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.upeu.lp2_gp2.dto.SalidaProgramadaDTO;
 import pe.edu.upeu.lp2_gp2.dto.SalidaProgramadaRequestDTO;
-import pe.edu.upeu.lp2_gp2.entity.Chofer;
-import pe.edu.upeu.lp2_gp2.entity.Reserva;
+import pe.edu.upeu.lp2_gp2.entity.PaqueteTour;
 import pe.edu.upeu.lp2_gp2.entity.SalidaProgramada;
-import pe.edu.upeu.lp2_gp2.entity.Transporte;
 import pe.edu.upeu.lp2_gp2.exception.BusinessException;
 import pe.edu.upeu.lp2_gp2.exception.ResourceNotFoundException;
 import pe.edu.upeu.lp2_gp2.repository.*;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
+/**
+ * Salidas programadas. En la v3 la base de datos se encarga de:
+ *  - trg_salida_biu: fecha_fin según los días del paquete y cupos_disponibles.
+ *  - trg_salida_confirmar: solo se confirma si el transporte asignado (OPERACION_TRANSPORTE)
+ *    alcanza para los pasajeros vendidos (PKG_ASIGNACION.faltante_transporte).
+ * El vehículo y el conductor ya no van en la salida: se asignan por operación.
+ */
 @Service
 public class SalidaProgramadaServiceImpl implements ISalidaProgramadaService {
     private final SalidaProgramadaRepository salidaRepository;
     private final PaqueteTourRepository paqueteRepository;
     private final GuiaRepository guiaRepository;
-    private final TransporteRepository transporteRepository;
-    private final ChoferRepository choferRepository;
-    private final ReservaRepository reservaRepository;
+    private final DetalleReservaRepository detalleRepository;
+    private final OperacionTransporteRepository operacionRepository;
+    private final PkgAsignacionRepository pkg;
+    private final EntityManager em;
 
     public SalidaProgramadaServiceImpl(SalidaProgramadaRepository salidaRepository, PaqueteTourRepository paqueteRepository,
-                                       GuiaRepository guiaRepository, TransporteRepository transporteRepository,
-                                       ChoferRepository choferRepository, ReservaRepository reservaRepository) {
+                                       GuiaRepository guiaRepository, DetalleReservaRepository detalleRepository,
+                                       OperacionTransporteRepository operacionRepository, PkgAsignacionRepository pkg,
+                                       EntityManager em) {
         this.salidaRepository = salidaRepository;
         this.paqueteRepository = paqueteRepository;
         this.guiaRepository = guiaRepository;
-        this.transporteRepository = transporteRepository;
-        this.choferRepository = choferRepository;
-        this.reservaRepository = reservaRepository;
+        this.detalleRepository = detalleRepository;
+        this.operacionRepository = operacionRepository;
+        this.pkg = pkg;
+        this.em = em;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<SalidaProgramadaDTO> listarTodo() {
-        return salidaRepository.findAllByOrderBySalidaIdAsc().stream().map(SalidaProgramadaDTO::desde).toList();
+        Map<Long, String> faltantes = pkg.faltantesPorSalida();
+        Map<Long, Integer> operaciones = pkg.operacionesPorSalida();
+        return salidaRepository.findAllByOrderBySalidaIdAsc().stream()
+                .map(s -> SalidaProgramadaDTO.desde(s, operaciones.get(s.getSalidaId()), faltantes.get(s.getSalidaId())))
+                .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public SalidaProgramadaDTO buscarPorId(Long id) {
-        return SalidaProgramadaDTO.desde(salidaRepository.findById(id)
+        return dto(salidaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Salida no encontrada con Id: " + id)));
     }
 
@@ -53,8 +68,10 @@ public class SalidaProgramadaServiceImpl implements ISalidaProgramadaService {
         validar(dto, null);
         SalidaProgramada s = new SalidaProgramada();
         copiar(dto, s);
-        s.setCuposDisponibles(dto.cuposMaximos());
-        return SalidaProgramadaDTO.desde(salidaRepository.save(s));
+        s.setFechaFin(null);   // la calcula trg_salida_biu
+        SalidaProgramada guardada = salidaRepository.saveAndFlush(s);
+        em.refresh(guardada);  // fecha_fin y cupos_disponibles vienen del trigger
+        return dto(guardada);
     }
 
     @Override
@@ -63,16 +80,20 @@ public class SalidaProgramadaServiceImpl implements ISalidaProgramadaService {
         SalidaProgramada s = salidaRepository.findByIdParaActualizar(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Salida no encontrada con Id: " + id));
         validar(dto, id);
-        int ocupados = viajerosActivos(id);
-        if (dto.cuposMaximos() < ocupados) {
-            throw new BusinessException("Ya hay " + ocupados + " viajeros reservados; los cupos no pueden ser menores.");
+        int vendidos = s.getCuposMaximos() - s.getCuposDisponibles();
+        if (dto.cuposMaximos() < vendidos) {
+            throw new BusinessException("Ya hay " + vendidos + " viajeros reservados; los cupos no pueden ser menores.");
         }
-        if ("CANCELADA".equals(dto.estado()) && ocupados > 0) {
+        if ("CANCELADA".equals(dto.estado()) && !"CANCELADA".equals(s.getEstado()) && vendidos > 0) {
             throw new BusinessException("No puedes cancelar una salida con reservas activas. Anúlalas primero.");
         }
+        boolean cambiaDuracion = !s.getPaqueteId().equals(dto.paqueteId()) || !s.getFechaInicio().equals(dto.fechaInicio());
         copiar(dto, s);
-        s.setCuposDisponibles(dto.cuposMaximos() - ocupados);
-        return SalidaProgramadaDTO.desde(salidaRepository.save(s));
+        if (cambiaDuracion) s.setFechaFin(null);   // trg_salida_biu la recalcula
+        // Al pasar a CONFIRMADA, trg_salida_confirmar verifica el transporte (ORA-20014)
+        salidaRepository.saveAndFlush(s);
+        em.refresh(s);
+        return dto(s);
     }
 
     @Override
@@ -80,76 +101,45 @@ public class SalidaProgramadaServiceImpl implements ISalidaProgramadaService {
     public void eliminar(Long id) {
         SalidaProgramada s = salidaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Salida no encontrada con Id: " + id));
-        if (reservaRepository.existsBySalidaId(id)) {
+        if (detalleRepository.existsBySalidaId(id)) {
             throw new BusinessException("La salida tiene reservas asociadas. Puedes marcarla como CANCELADA.");
+        }
+        if (operacionRepository.existsBySalidaId(id)) {
+            throw new BusinessException("La salida tiene operaciones de transporte. Cancélalas o márcala como CANCELADA.");
         }
         salidaRepository.delete(s);
     }
 
+    private SalidaProgramadaDTO dto(SalidaProgramada s) {
+        boolean activa = "PROGRAMADA".equals(s.getEstado()) || "CONFIRMADA".equals(s.getEstado());
+        String faltante = activa ? pkg.faltanteTransporte(s.getSalidaId(), s.getCuposMaximos() - s.getCuposDisponibles()) : null;
+        return SalidaProgramadaDTO.desde(s, pkg.operacionesPorSalida().get(s.getSalidaId()), faltante);
+    }
+
     private void validar(SalidaProgramadaRequestDTO d, Long id) {
-        if (!paqueteRepository.existsById(d.paqueteId())) throw new BusinessException("Selecciona un paquete.");
-        if (d.fechaFin().isBefore(d.fechaInicio())) {
-            throw new BusinessException("La fecha fin no puede ser anterior a la fecha inicio.");
-        }
+        PaqueteTour paquete = paqueteRepository.findById(d.paqueteId())
+                .orElseThrow(() -> new BusinessException("Selecciona un paquete."));
         if (d.guiaId() != null && !guiaRepository.existsById(d.guiaId())) throw new BusinessException("El guía seleccionado no existe.");
-        if (d.transporteId() != null) {
-            Transporte t = transporteRepository.findById(d.transporteId())
-                    .orElseThrow(() -> new BusinessException("El transporte seleccionado no existe."));
-            if (d.cuposMaximos() > t.getCapacidad()) {
-                throw new BusinessException("Los cupos superan la capacidad del transporte (" + t.getCapacidad() + ").");
-            }
-        }
-        if (d.choferId() != null) {
-            if (d.transporteId() == null) throw new BusinessException("Asigna primero el vehículo que manejará el chofer.");
-            Chofer c = choferRepository.findById(d.choferId())
-                    .orElseThrow(() -> new BusinessException("El chofer seleccionado no existe."));
-            if (!"ACTIVO".equals(c.getEstado())) throw new BusinessException("El chofer " + c.getNombreCompleto() + " está inactivo.");
-        }
         boolean activa = "PROGRAMADA".equals(d.estado()) || "CONFIRMADA".equals(d.estado());
-        List<String> estadosActivos = List.of("PROGRAMADA", "CONFIRMADA");
         if (activa && d.guiaId() != null) {
+            // Misma regla que el trigger para la fecha fin: inicio + días del paquete - 1
+            LocalDate fin = d.fechaInicio().plusDays(paquete.getDias() - 1L);
             List<SalidaProgramada> cruces = salidaRepository
                     .findByGuiaIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
-                            d.guiaId(), estadosActivos, d.fechaFin(), d.fechaInicio());
-            if (hayOtraSalida(cruces, id)) throw new BusinessException("El guía ya está asignado a otra salida en esas fechas.");
+                            d.guiaId(), List.of("PROGRAMADA", "CONFIRMADA"), fin, d.fechaInicio());
+            for (SalidaProgramada s : cruces) {
+                if (id == null || !s.getSalidaId().equals(id)) {
+                    throw new BusinessException("El guía ya está asignado a otra salida en esas fechas.");
+                }
+            }
         }
-        if (activa && d.transporteId() != null) {
-            List<SalidaProgramada> cruces = salidaRepository
-                    .findByTransporteIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
-                            d.transporteId(), estadosActivos, d.fechaFin(), d.fechaInicio());
-            if (hayOtraSalida(cruces, id)) throw new BusinessException("El transporte ya está asignado a otra salida en esas fechas.");
-        }
-        if (activa && d.choferId() != null) {
-            List<SalidaProgramada> cruces = salidaRepository
-                    .findByChoferIdAndEstadoInAndFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
-                            d.choferId(), estadosActivos, d.fechaFin(), d.fechaInicio());
-            if (hayOtraSalida(cruces, id)) throw new BusinessException("El chofer ya está asignado a otra salida en esas fechas.");
-        }
-    }
-
-    private boolean hayOtraSalida(List<SalidaProgramada> salidas, Long idActual) {
-        for (SalidaProgramada s : salidas) {
-            if (idActual == null || !s.getSalidaId().equals(idActual)) return true;
-        }
-        return false;
-    }
-
-    private int viajerosActivos(Long salidaId) {
-        int total = 0;
-        for (Reserva r : reservaRepository.findBySalidaIdAndEstadoReservaNot(salidaId, "ANULADA")) {
-            total = total + r.getNumeroViajeros();
-        }
-        return total;
     }
 
     private void copiar(SalidaProgramadaRequestDTO d, SalidaProgramada s) {
         s.setPaqueteId(d.paqueteId());
         s.setFechaInicio(d.fechaInicio());
-        s.setFechaFin(d.fechaFin());
         s.setCuposMaximos(d.cuposMaximos());
         s.setGuiaId(d.guiaId());
-        s.setTransporteId(d.transporteId());
-        s.setChoferId(d.choferId());
         s.setEstado(d.estado());
     }
 }

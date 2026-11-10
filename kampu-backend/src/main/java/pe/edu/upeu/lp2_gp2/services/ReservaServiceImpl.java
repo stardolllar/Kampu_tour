@@ -1,5 +1,6 @@
 package pe.edu.upeu.lp2_gp2.services;
 
+import jakarta.persistence.EntityManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,44 +17,64 @@ import pe.edu.upeu.lp2_gp2.repository.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+/**
+ * Reservas v3: cabecera (RESERVAS) + detalle por salida (DETALLE_RESERVA) + pasajeros del detalle.
+ * Los triggers de la base de datos hacen el trabajo pesado:
+ *  - trg_detalle_reserva_biud: valida la salida, descuenta cupos, copia el precio base
+ *    y calcula RESERVAS.monto_total (y, si la salida está CONFIRMADA, que el transporte alcance).
+ *  - trg_pasajeros_cupo: no más pasajeros que la cantidad del detalle.
+ *  - trg_reserva_estado_bu: al ANULAR devuelve los cupos; una anulada no se reactiva.
+ */
 @Service
 public class ReservaServiceImpl implements IReservaService {
     private final ReservaRepository reservaRepository;
+    private final DetalleReservaRepository detalleRepository;
     private final PasajeroReservaRepository pasajeroRepository;
+    private final VistaReservaResumenRepository resumenRepository;
     private final SalidaProgramadaRepository salidaRepository;
     private final ClienteRepository clienteRepository;
-    private final PaqueteTourRepository paqueteRepository;
+    private final UsuarioSistemaRepository usuarioRepository;
     private final PagoRepository pagoRepository;
     private final ApplicationEventPublisher eventos;
+    private final EntityManager em;
 
-    public ReservaServiceImpl(ReservaRepository reservaRepository, PasajeroReservaRepository pasajeroRepository,
+    public ReservaServiceImpl(ReservaRepository reservaRepository, DetalleReservaRepository detalleRepository,
+                              PasajeroReservaRepository pasajeroRepository, VistaReservaResumenRepository resumenRepository,
                               SalidaProgramadaRepository salidaRepository, ClienteRepository clienteRepository,
-                              PaqueteTourRepository paqueteRepository, PagoRepository pagoRepository,
-                              ApplicationEventPublisher eventos) {
+                              UsuarioSistemaRepository usuarioRepository, PagoRepository pagoRepository,
+                              ApplicationEventPublisher eventos, EntityManager em) {
         this.reservaRepository = reservaRepository;
+        this.detalleRepository = detalleRepository;
         this.pasajeroRepository = pasajeroRepository;
+        this.resumenRepository = resumenRepository;
         this.salidaRepository = salidaRepository;
         this.clienteRepository = clienteRepository;
-        this.paqueteRepository = paqueteRepository;
+        this.usuarioRepository = usuarioRepository;
         this.pagoRepository = pagoRepository;
         this.eventos = eventos;
+        this.em = em;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ReservaDTO> listarTodo() {
-        return reservaRepository.findAllByOrderByReservaIdAsc().stream().map(ReservaDTO::desde).toList();
+        Map<Long, DetalleReserva> detalles = new HashMap<>();
+        for (DetalleReserva d : detalleRepository.findAllByOrderByDetalleIdAsc()) detalles.putIfAbsent(d.getReservaId(), d);
+        Map<Long, VistaReservaResumen> resumen = resumenRepository.findAll().stream()
+                .collect(Collectors.toMap(VistaReservaResumen::getReservaId, Function.identity()));
+        return reservaRepository.findAllByOrderByReservaIdAsc().stream()
+                .map(r -> ReservaDTO.desde(r, detalles.get(r.getReservaId()), resumen.get(r.getReservaId())))
+                .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public ReservaDTO buscarPorId(Long id) {
-        return ReservaDTO.desde(obtener(id));
+        return dto(obtener(id));
     }
 
     @Override
@@ -66,30 +87,22 @@ public class ReservaServiceImpl implements IReservaService {
             }
         }
         validarCliente(dto);
-        SalidaProgramada salida = salidaRepository.findByIdParaActualizar(dto.salidaId())
+        SalidaProgramada salida = salidaRepository.findById(dto.salidaId())
                 .orElseThrow(() -> new BusinessException("Selecciona una salida."));
-        if (!"PROGRAMADA".equals(salida.getEstado()) && !"CONFIRMADA".equals(salida.getEstado())) {
-            throw new BusinessException("La salida no admite nuevas reservas.");
-        }
         LocalDate hoy = LocalDate.now();
+        // El trigger valida estado y cupos; que la salida no haya iniciado es regla de la aplicación
         if (salida.getFechaInicio().isBefore(hoy)) throw new BusinessException("La salida ya inició.");
-
-        int n = dto.pasajeros().size();
-        if (n > salida.getCuposDisponibles()) {
-            throw new BusinessException("Solo quedan " + salida.getCuposDisponibles() + " cupos en esta salida.");
-        }
         Set<String> documentos = new HashSet<>();
         for (PasajeroRequestDTO p : dto.pasajeros()) {
             if (p.fechaNacimiento() != null && !p.fechaNacimiento().isBefore(hoy)) {
                 throw new BusinessException("La fecha de nacimiento de " + p.nombreCompleto().trim() + " debe ser anterior a hoy.");
             }
-            if (!documentos.add(p.numeroDocumento().trim().toUpperCase())) {
+            if (!documentos.add(p.tipoDocumento() + ":" + p.numeroDocumento().trim().toUpperCase())) {
                 throw new BusinessException("El documento " + p.numeroDocumento().trim() + " está repetido en la reserva.");
             }
         }
 
-        PaqueteTour paquete = paqueteRepository.findById(salida.getPaqueteId())
-                .orElseThrow(() -> new BusinessException("El paquete de la salida no existe."));
+        // 1) Cabecera (monto_total empieza en 0)
         Reserva r = new Reserva();
         r.setClienteId(dto.clienteId());
         if (dto.clienteId() == null) {
@@ -97,19 +110,26 @@ public class ReservaServiceImpl implements IReservaService {
             r.setContactoEmail(dto.contacto().email().trim().toLowerCase());
             r.setContactoTelefono(dto.contacto().telefono().trim());
         }
-        r.setSalidaId(dto.salidaId());
         r.setFechaReserva(LocalDateTime.now());
-        r.setNumeroViajeros(n);
-        r.setMontoTotal(paquete.getPrecioBase().multiply(BigDecimal.valueOf(n)));
         r.setMontoPagado(BigDecimal.ZERO);
         r.setEstadoReserva("PENDIENTE");
         r.setEstadoPago("PENDIENTE");
         r.setObservaciones(dto.observaciones() == null || dto.observaciones().isBlank() ? null : dto.observaciones().trim());
-        Reserva guardada = reservaRepository.save(r);
+        Reserva guardada = reservaRepository.saveAndFlush(r);
 
+        // 2) Detalle: trg_detalle_reserva_biud descuenta cupos, congela el precio y suma monto_total
+        DetalleReserva d = new DetalleReserva();
+        d.setReservaId(guardada.getReservaId());
+        d.setSalidaId(salida.getSalidaId());
+        d.setCantidad(dto.pasajeros().size());
+        d.setPrecioUnitario(null);   // el trigger copia PAQUETES_TOUR.precio_base
+        d.setDescuento(BigDecimal.ZERO);
+        DetalleReserva detalle = detalleRepository.saveAndFlush(d);
+
+        // 3) Pasajeros del detalle (trg_pasajeros_cupo)
         for (PasajeroRequestDTO p : dto.pasajeros()) {
             PasajeroReserva pr = new PasajeroReserva();
-            pr.setReservaId(guardada.getReservaId());
+            pr.setDetalleId(detalle.getDetalleId());
             pr.setNombreCompleto(p.nombreCompleto().trim());
             pr.setTipoDocumento(p.tipoDocumento());
             pr.setNumeroDocumento(p.numeroDocumento().trim());
@@ -117,9 +137,11 @@ public class ReservaServiceImpl implements IReservaService {
             pr.setFechaNacimiento(p.fechaNacimiento());
             pasajeroRepository.save(pr);
         }
-        salida.setCuposDisponibles(salida.getCuposDisponibles() - n);
-        salidaRepository.save(salida);
-        return ReservaDTO.desde(guardada);
+        pasajeroRepository.flush();
+
+        em.refresh(guardada);   // monto_total
+        em.refresh(detalle);    // precio_unitario y subtotal
+        return dto(guardada);
     }
 
     @Override
@@ -128,9 +150,9 @@ public class ReservaServiceImpl implements IReservaService {
         Reserva r = obtener(id);
         if (!"PENDIENTE".equals(r.getEstadoReserva())) throw new BusinessException("Solo se confirman reservas pendientes.");
         r.setEstadoReserva("CONFIRMADA");
-        Reserva guardada = reservaRepository.save(r);
+        reservaRepository.saveAndFlush(r);
         eventos.publishEvent(new BoletaEvento(id, "reserva confirmada"));
-        return ReservaDTO.desde(guardada);
+        return dto(r);
     }
 
     @Override
@@ -139,7 +161,8 @@ public class ReservaServiceImpl implements IReservaService {
         Reserva r = obtener(id);
         if (!"CONFIRMADA".equals(r.getEstadoReserva())) throw new BusinessException("Solo se completan reservas confirmadas.");
         r.setEstadoReserva("COMPLETADA");
-        return ReservaDTO.desde(reservaRepository.save(r));
+        reservaRepository.saveAndFlush(r);
+        return dto(r);
     }
 
     @Override
@@ -150,6 +173,9 @@ public class ReservaServiceImpl implements IReservaService {
         if (!"PENDIENTE".equals(r.getEstadoReserva()) && !"CONFIRMADA".equals(r.getEstadoReserva())) {
             throw new BusinessException("Solo se anulan reservas pendientes o confirmadas.");
         }
+        // trg_reserva_estado_bu exige el usuario que anula (ORA-20031)
+        if (usuarioId == null) throw new BusinessException("Indica el usuario que anula la reserva (inicia sesión de nuevo).");
+        if (!usuarioRepository.existsById(usuarioId)) throw new BusinessException("El usuario que anula no existe.");
         boolean hayReembolso = r.getMontoPagado() != null && r.getMontoPagado().signum() > 0;
         String forma = formaReembolso == null || formaReembolso.isBlank() ? null : formaReembolso.trim();
         if (hayReembolso && forma == null) throw new BusinessException("Indica la forma de reembolso.");
@@ -163,24 +189,27 @@ public class ReservaServiceImpl implements IReservaService {
         r.setEstadoPago(hayReembolso ? "REEMBOLSADO" : "PENDIENTE");
         r.setFormaReembolso(hayReembolso ? forma : null);
         r.setUsuarioAnulaId(usuarioId);
-        Reserva guardada = reservaRepository.save(r);
-
-        Optional<SalidaProgramada> salida = salidaRepository.findByIdParaActualizar(r.getSalidaId());
-        if (salida.isPresent()) {
-            SalidaProgramada s = salida.get();
-            s.setCuposDisponibles(Math.min(s.getCuposMaximos(), s.getCuposDisponibles() + r.getNumeroViajeros()));
-            salidaRepository.save(s);
-        }
-        return ReservaDTO.desde(guardada);
+        // Los cupos los devuelve trg_reserva_estado_bu
+        reservaRepository.saveAndFlush(r);
+        return dto(r);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PasajeroReservaDTO> listarPasajeros(Long reservaId) {
-        List<PasajeroReserva> lista = reservaId == null
-                ? pasajeroRepository.findAllByOrderByPasajeroIdAsc()
-                : pasajeroRepository.findByReservaIdOrderByPasajeroId(reservaId);
-        return lista.stream().map(PasajeroReservaDTO::desde).toList();
+        Map<Long, Long> reservaDeDetalle = new HashMap<>();
+        List<PasajeroReserva> lista;
+        if (reservaId == null) {
+            for (DetalleReserva d : detalleRepository.findAll()) reservaDeDetalle.put(d.getDetalleId(), d.getReservaId());
+            lista = pasajeroRepository.findAllByOrderByPasajeroIdAsc();
+        } else {
+            for (DetalleReserva d : detalleRepository.findByReservaIdOrderByDetalleIdAsc(reservaId)) {
+                reservaDeDetalle.put(d.getDetalleId(), d.getReservaId());
+            }
+            lista = reservaDeDetalle.isEmpty() ? List.of()
+                    : pasajeroRepository.findByDetalleIdInOrderByPasajeroIdAsc(reservaDeDetalle.keySet());
+        }
+        return lista.stream().map(p -> PasajeroReservaDTO.desde(p, reservaDeDetalle.get(p.getDetalleId()))).toList();
     }
 
     // Exactamente uno: un cliente registrado o los datos de contacto del invitado.
@@ -198,6 +227,12 @@ public class ReservaServiceImpl implements IReservaService {
             String errorTelefono = Reglas.errorTelefonoPais(dto.contacto().telefono());
             if (errorTelefono != null) throw new BusinessException(errorTelefono);
         }
+    }
+
+    private ReservaDTO dto(Reserva r) {
+        List<DetalleReserva> detalles = detalleRepository.findByReservaIdOrderByDetalleIdAsc(r.getReservaId());
+        return ReservaDTO.desde(r, detalles.isEmpty() ? null : detalles.get(0),
+                resumenRepository.findById(r.getReservaId()).orElse(null));
     }
 
     private Reserva obtener(Long id) {

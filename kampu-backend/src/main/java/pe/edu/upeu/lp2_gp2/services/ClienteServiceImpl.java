@@ -83,12 +83,17 @@ public class ClienteServiceImpl implements IClienteService {
         if (!Reglas.documentoValido(dto.tipoDocumento(), dto.numeroDocumento())) {
             throw new BusinessException(Reglas.MSG_DOCUMENTO);
         }
+        // Personas: solo letras; con RUC el nombre es una razón social
+        if (!"RUC".equals(dto.tipoDocumento()) && !dto.nombreCompleto().matches(Reglas.NOMBRE_PERSONA)) {
+            throw new BusinessException("El nombre " + Reglas.MSG_NOMBRE_PERSONA);
+        }
         String errorTelefono = Reglas.errorTelefonoPais(dto.telefono());
         if (errorTelefono != null) throw new BusinessException(errorTelefono);
-        String documento = dto.numeroDocumento().trim();
-        Optional<Cliente> existente = clienteRepository.findByNumeroDocumento(documento);
+        String documento = dto.numeroDocumento().trim().toUpperCase();
+        // uq_cli_tipo_doc: el documento es único por tipo
+        Optional<Cliente> existente = clienteRepository.findByTipoDocumentoAndNumeroDocumentoIgnoreCase(dto.tipoDocumento(), documento);
         if (existente.isPresent() && !existente.get().getClienteId().equals(id)) {
-            throw new DuplicateResourceException("Ya existe un cliente con ese número de documento.");
+            throw new DuplicateResourceException("Ya existe un cliente con ese tipo y número de documento.");
         }
         c.setNombreCompleto(dto.nombreCompleto().trim());
         c.setTipoDocumento(dto.tipoDocumento());

@@ -1,11 +1,14 @@
 package pe.edu.upeu.lp2_gp2.entity;
 
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import org.hibernate.annotations.DynamicUpdate;
 
+// Cabecera de la reserva. monto_total = SUM(DETALLE_RESERVA.subtotal), lo mantiene
+// trg_detalle_reserva_biud; al ANULAR, trg_reserva_estado_bu devuelve los cupos.
 @Entity
+@DynamicUpdate
 @Table(name = "RESERVAS")
 public class Reserva {
     @Id
@@ -17,16 +20,11 @@ public class Reserva {
     @Column(name = "cliente_id")
     private Long clienteId;
 
-    @Column(name = "salida_id", nullable = false)
-    private Long salidaId;
-
     @Column(name = "fecha_reserva")
     private LocalDateTime fechaReserva;
 
-    @Column(name = "numero_viajeros", nullable = false)
-    private Integer numeroViajeros;
-
-    @Column(name = "monto_total", nullable = false, precision = 10, scale = 2)
+    // Lo calcula el trigger del detalle: Hibernate nunca lo escribe
+    @Column(name = "monto_total", insertable = false, updatable = false)
     private BigDecimal montoTotal;
 
     @Column(name = "monto_pagado", precision = 10, scale = 2)
@@ -79,28 +77,12 @@ public class Reserva {
         this.clienteId = clienteId;
     }
 
-    public Long getSalidaId() {
-        return salidaId;
-    }
-
-    public void setSalidaId(Long salidaId) {
-        this.salidaId = salidaId;
-    }
-
     public LocalDateTime getFechaReserva() {
         return fechaReserva;
     }
 
     public void setFechaReserva(LocalDateTime fechaReserva) {
         this.fechaReserva = fechaReserva;
-    }
-
-    public Integer getNumeroViajeros() {
-        return numeroViajeros;
-    }
-
-    public void setNumeroViajeros(Integer numeroViajeros) {
-        this.numeroViajeros = numeroViajeros;
     }
 
     public BigDecimal getMontoTotal() {
