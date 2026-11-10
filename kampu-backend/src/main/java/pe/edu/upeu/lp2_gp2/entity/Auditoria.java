@@ -13,25 +13,26 @@ public class Auditoria {
     @Column(name = "auditoria_id")
     private Long auditoriaId;
 
-    @Column(name = "entidad")
+    @Column(name = "entidad", length = 30)
     private String entidad;
 
     @Column(name = "entidad_id")
     private Long entidadId;
 
-    @Column(name = "campo")
+    @Column(name = "campo", length = 30)
     private String campo;
 
-    @Column(name = "valor_anterior")
+    @Column(name = "valor_anterior", length = 100)
     private String valorAnterior;
 
-    @Column(name = "valor_nuevo")
+    @Column(name = "valor_nuevo", length = 100)
     private String valorNuevo;
 
-    @Column(name = "usuario")
+    @Column(name = "usuario", length = 100)
     private String usuario;
 
-    @Column(name = "rol_usuario")
+    // Clave de partición de AUDITORIA (03_particionamiento_roles.sql): Oracle no deja cambiar su tamaño (ORA-14060)
+    @Column(name = "rol_usuario", length = 20)
     private String rolUsuario;
 
     @Column(name = "fecha")
