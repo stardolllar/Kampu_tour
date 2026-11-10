@@ -12,6 +12,7 @@ import pe.edu.upeu.lp2_gp2.exception.BusinessException;
 import pe.edu.upeu.lp2_gp2.exception.ResourceNotFoundException;
 import pe.edu.upeu.lp2_gp2.repository.PagoRepository;
 import pe.edu.upeu.lp2_gp2.repository.ReservaRepository;
+import pe.edu.upeu.lp2_gp2.seguridad.SesionActual;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -69,6 +70,8 @@ public class PagoServiceImpl implements IPagoService {
         p.setCodigoTransaccion(codigo);
         p.setFechaPago(LocalDateTime.now());
         p.setEstadoTransaccion(dto.estadoTransaccion());
+        // Clave de partición de PAGOS: quién lo registró
+        p.setRegistradoPor("ADMIN".equals(SesionActual.rol()) ? "ADMIN" : "VENDEDOR");
         Pago guardado = pagoRepository.saveAndFlush(p);
         em.refresh(guardado);   // monto_pen la calcula Oracle
         recalcular(r);

@@ -1,94 +1,145 @@
-# KAMPU · Tour Manager v3 — sistema integrado (Angular + Spring Boot + Oracle)
+# KAMPU · Tour Manager v4 — sistema integrado (Angular + Spring Boot + Oracle)
 
-```
-proyecto/
-├── kampu-backend/      Backend Spring Boot 3.4 (Java 21) — API REST en http://localhost:8082/lp2_gp2
-│   └── src/main/resources/db/
-│       ├── 00_reset.sql      Solo si ya tenías una base creada: borra el esquema anterior y el v3
-│       ├── 01_schema_v3.sql       Script v3: tablas, PKG_ASIGNACION (PL/SQL), vistas y triggers
-│       ├── 02_extension_kampu.sql Teléfonos/documentos únicos, rutas hacia paquetes, PKG_RUTAS (duración real)
-│       └── 03_data.sql            Datos de demostración (se cargan pasando por los triggers)
-└── kampu-frontend/     Frontend Angular 18
-```
+Agencia de turismo: catálogo de paquetes, salidas programadas, reservas, pagos, tráfico/transporte y, desde la v4,
+**portal del cliente** con **seguridad por roles** aplicada en la base de datos.
 
-## Versión 3 (Kampu Tour Manager v3)
-
-El proyecto quedó adaptado al script `kampu_tour_manager_v3.sql`. La lógica de negocio pesada vive ahora en
-**Oracle** (PL/SQL, triggers y vistas) y el backend la usa en vez de repetirla en Java:
-
-| Antes | v3 |
-|---|---|
-| `TRANSPORTE`, `CHOFERES` | `EMPRESA_TRANSPORTE` (proveedores afiliados), `VEHICULO` y `CONDUCTOR` (de una empresa), `LUGARES`, `RUTAS_PROVEEDOR` |
-| Vehículo y chofer en `SALIDAS_PROGRAMADAS` | `OPERACION_TRANSPORTE`: cada tramo de la salida (aeropuerto → hotel, hotel → atractivo…) con su empresa, vehículo, conductor y estado |
-| `RESERVAS.salida_id` / `numero_viajeros` | `DETALLE_RESERVA` (una línea por salida) y los pasajeros cuelgan del detalle |
-| Cupos y montos calculados en Java | Triggers: cupos, precio congelado y `monto_total`; la anulación devuelve los cupos |
-| — | `HISTORIAL_TRAFICO_OPERACION`, catálogo `DOMINIO_ESTADOS` / `DOMINIO_TRANSICIONES` |
-| Roles `ADMIN`, `VENTAS` | `ADMIN`, `VENDEDOR`, `OPERADOR` (`chk_usu_rol`) |
-| Pagos solo con moneda | `tipo_cambio` y `monto_pen` (columna virtual) |
-| Clientes DNI/CE/PASAPORTE | también **RUC** (empresas); documento único por tipo |
-
-### Dónde usa el backend cada objeto PL/SQL
-
-| Objeto de la base de datos | Qué hace | Lo usa |
+| Capa | Carpeta | Tecnología |
 |---|---|---|
-| `PKG_ASIGNACION.asignar_automatico` | Elige vehículo + conductor de una misma empresa y deja la operación ASIGNADA | `POST /operaciones/{id}/asignar-automatico` (`PkgAsignacionRepository`) |
-| `PKG_ASIGNACION.motivo_vehiculo` / `motivo_conductor` / `horas_conductor_dia` | Por qué un recurso no es elegible (cruce, mantenimiento, licencia, 10 h/día…) | `GET /operaciones/{id}/candidatos` (pantalla *Asignar*) |
-| `PKG_ASIGNACION.faltante_transporte` | Tramo de la salida cuyo transporte no alcanza | `faltanteTransporte` de `GET /salidas` |
-| `VW_RECURSOS_DISPONIBLES` | Recursos elegibles para una operación PROGRAMADA | `GET /operaciones/{id}/recursos-disponibles` |
-| `VW_TABLERO_OPERACIONES` | Tablero con nombres, horas reales y minutos de retraso | `GET /operaciones` (entidad `VistaTableroOperacion`) |
-| `VW_EMPRESA_CAPACIDAD` | Capacidad total, vehículos y conductores disponibles por empresa | `GET /empresas` (entidad `VistaEmpresaCapacidad`) |
-| `V_RESERVAS_RESUMEN` | Número de viajeros y saldo de cada reserva | `GET /reservas` (entidad `VistaReservaResumen`) |
-| `trg_salida_biu` | Calcula `fecha_fin` y `cupos_disponibles` | Crear/editar salidas (el backend envía `fecha_fin` nula y relee la fila) |
-| `trg_salida_confirmar` | Solo confirma una salida con transporte suficiente | `PUT /salidas/{id}` con estado CONFIRMADA |
-| `trg_detalle_reserva_biud` | Valida salida y cupos, congela el precio, suma `monto_total` y controla el transporte de salidas confirmadas | `POST /reservas` |
-| `trg_pasajeros_cupo` | No más pasajeros que la cantidad del detalle | `POST /reservas` |
-| `trg_reserva_estado_bu` | Al anular devuelve los cupos; una anulada no se reactiva | `PATCH /reservas/{id}/anular` |
-| `trg_operacion_transporte` | Código `KMP-###`, llegada estimada, transiciones, recursos obligatorios, ruta activa, cruces, descanso, mantenimiento, capacidad e historial | `POST/PUT /operaciones`, `PATCH /operaciones/{id}/estado`, `PATCH /operaciones/{id}/asignar` |
+| Base de datos | `kampu-backend/src/main/resources/db/` | Oracle 12.2+ (probado en Oracle 23ai Free) |
+| Backend | `kampu-backend` | Spring Boot 3.4 · JPA · JdbcTemplate (paquetes PL/SQL) · BCrypt |
+| Frontend | `kampu-frontend` | Angular 18 (standalone, signals) · Tailwind |
 
-- Los mensajes de `RAISE_APPLICATION_ERROR` (ORA-20xxx) llegan tal cual al usuario (respuesta 400), y las restricciones
-  UNIQUE/CHECK/FK se traducen por nombre (`exception/ErroresOracle.java`). Ejemplo:
-  `KMP-008 - vehículo: capacidad insuficiente (4 < 10 pax)`.
-- Las columnas que mantienen los triggers (`cupos_disponibles`, `monto_total`, `codigo_operacion`, `subtotal`, `monto_pen`)
-  están mapeadas con `insertable = false, updatable = false`, y las entidades usan `@DynamicUpdate` para que los triggers
-  `UPDATE OF ...` solo se disparen con las columnas que realmente cambian.
-- El historial de tráfico guarda quién hizo cada cambio: el frontend envía el encabezado `X-Usuario` y el backend lo pone
-  en `DBMS_SESSION.SET_IDENTIFIER` (el trigger lee `USERENV.CLIENT_IDENTIFIER`).
-- Todas las entidades y vistas se verificaron contra el esquema v3 con `spring.jpa.hibernate.ddl-auto=validate`.
+## Versión 4 — qué cambió
 
-### Ajuste al script v3
+1. **"Registrarse" reemplaza a "Probar cuenta demo".** El login ya no tiene los botones Administrador / Ventas / Operador.
+   Ahora tiene un enlace **Registrarse** (autoregistro de clientes externos) y conserva **Volver al inicio**.
+2. **Módulo de clientes** (`/registro`, `/mi-cuenta`, `/mi-cuenta/paquetes/:id`): el cliente ve **solo sus paquetes**, en modo
+   consulta, con **estado de ejecución** (Por empezar / En curso / Terminado) y **estado de pago**
+   (Pagado completo / Falta pagar / Pendiente de pago). Lo único que puede hacer es *informar un pago*, que queda
+   PENDIENTE hasta que Ventas lo valide. Todas sus pantallas muestran **Volver al inicio**.
+3. **Seguridad por roles** en tres capas: menú y rutas en Angular (guards) → interceptor del backend (token) →
+   `PKG_SEGURIDAD_ROLES` en Oracle (matriz de permisos + vistas que filtran por la sesión).
+4. **Modelo v4 de 14 tablas** (+ `AUDITORIA`): `PROVEEDORES`, `PERSONAL` (guías y conductores) y `VEHICULOS` reemplazan a
+   empresas/guías/conductores/rutas de la v3. Columnas añadidas a lo que trae el script v4 van marcadas `-- (+v4)`.
+5. **Exactamente dos objetos por categoría** (PL/SQL, triggers, vistas, paquetes) y **script de particionamiento por nivel de usuario**.
+6. Contraseñas con **BCrypt** (se aceptan las de texto plano antiguas de usuarios internos) y sesión con **token Bearer**.
 
-Una sola línea de `01_schema_v3.sql` cambia respecto al archivo original: en
-`INSERT INTO DOMINIO_TRANSICIONES VALUES ('ASIGNADO', 'PROGRAMADO');   -- desasignar` el comentario va ahora en su propia
-línea. En **SQL*Plus**, un comentario después del `;` hace que la sentencia se una con la siguiente y **fallan las dos**
-(se perdían las transiciones ASIGNADO → PROGRAMADO y ASIGNADO → EMBARQUE). En SQL Developer (F5) no pasaba.
+### Cuentas
 
-### Extensión (`02_extension_kampu.sql`)
+| Usuario | Contraseña | Rol | Entra a |
+|---|---|---|---|
+| `admin` | `admin123` | ADMIN | Panel completo |
+| `ventas` | `ventas123` | VENDEDOR | Panel comercial |
+| `operador` | `operador123` | OPERADOR | Panel operativo |
+| `ana.ramirez@mail.com` (o DNI `45871236`) | `cliente123` | CLIENTE | Mis paquetes |
+| `john.miller@mail.com` | `cliente123` | CLIENTE | Mis paquetes |
 
-| Regla / función | Cómo se aplica |
-|---|---|
-| **Teléfonos sin repetir** en clientes, guías, conductores y empresas | Índices únicos `uq_cli_telefono`, `uq_guia_telefono`, `uq_cond_telefono`, `uq_emp_telefono` sobre los dígitos (`TRANSLATE(telefono, '0+-() ', '0')`): `+51 987 654 321` = `+51987654321`. El backend y los formularios avisan antes. |
-| **Documento del cliente sin repetir** (DNI, CE, pasaporte o RUC) | Índice único `uq_cli_numero_doc` sobre `UPPER(numero_documento)`, sin importar el tipo. |
-| **Un pasajero no se repite en la misma salida** | Trigger `trg_pasajeros_doc_salida` (reservas activas; en otra salida sí puede viajar). |
-| **Rutas hacia un paquete** | `RUTAS_PROVEEDOR.paquete_id` y `PAQUETES_TOUR.lugar_destino_id`. En *Logística → Rutas*, el destino puede ser un **paquete**: el destino es el lugar del paquete (`trg_ruta_biu`) y al crear la ruta **se crea automáticamente su salida programada** (fecha, cupos y guía en el mismo formulario). |
-| **Duración real de la ruta** | `LUGARES.latitud/longitud` (coordenadas reales). Al dejar la duración vacía o pulsar *Calcular*, el backend consulta **OSRM** (red vial de OpenStreetMap, `GET /rutas/estimar-duracion`); sin internet usa `PKG_RUTAS.duracion_estimada_min` (distancia haversine calibrada con tiempos reales). Si faltan coordenadas, `trg_ruta_biu` pide indicarla a mano. |
+Los demás clientes de la demo los creó Ventas y **no tienen cuenta web**: pueden activarla con *Registrarse* usando
+su **mismo documento y correo** (el procedimiento "reclama" el cliente existente y sus reservas aparecen solas).
 
-- OSRM se configura en `application.yaml` (`OSRM_URL`, `OSRM_HABILITADO`). El servidor público es para pruebas; en
-  producción conviene uno propio.
-- La estimación sin internet es aproximada (±20 % en la mayoría de rutas de prueba; en carreteras costeras rectas,
-  como Paracas → Huacachina, sobreestima). Ajusta las constantes de `PKG_RUTAS` o escribe la duración a mano.
-- **Base v3 que ya tiene datos:** ejecuta solo `02_extension_kampu.sql` (no borra nada). Antes revisa las consultas de su
-  sección 0: si hay teléfonos o documentos repetidos, la creación del índice falla hasta corregirlos. Luego registra las
-  coordenadas de tus lugares (Logística → Lugares) y el lugar de destino de cada paquete.
+## Objetos críticos de backend (2 por categoría) y su justificación
 
-### Pantallas nuevas o cambiadas (frontend)
+Todos están en `01_schema_v4.sql`, comentados.
 
-- **Tráfico** (`/operaciones`): tablero de operaciones con filtros, asignación automática (`PKG_ASIGNACION`) o manual
-  (con el motivo de cada recurso no elegible), cambio de estado según las transiciones permitidas, historial y observaciones.
-- **Logística** (`/recursos`): Guías, Empresas (con capacidad de la vista), Vehículos, Conductores, Lugares y Rutas.
-- **Salidas**: la fecha fin la calcula la base de datos; la columna Transporte muestra las operaciones de la salida y si
-  falta capacidad (`faltante_transporte`). Vehículo y chofer ya no se eligen aquí.
-- **Reserva**: muestra las operaciones de su salida, el precio por persona y el descuento del detalle.
-- **Clientes**: admite RUC (razón social). Login: nueva cuenta demo `operador`.
+| Categoría | Objeto | Qué hace | Por qué este y no otro |
+|---|---|---|---|
+| PL/SQL | `FN_ESTADO_PAGO_PAQUETE(reserva_id)` | Devuelve `PAGADO_COMPLETO`, `FALTA_PAGAR`, `PENDIENTE_PAGO` o `ANULADO` usando solo pagos **APROBADOS**. | Es el "estado de pago" que pide el cliente. Al estar en la BD, la vista del cliente, el resumen interno y la boleta usan la misma regla. |
+| PL/SQL | `SP_REGISTRAR_CLIENTE_EXTERNO(...)` | Registro externo: valida documento, correo y teléfono únicos (errores `-20100`…`-20104`); si el cliente ya existía sin cuenta y coincide documento **y** correo, le activa la cuenta; deja fila en `AUDITORIA`. | El botón *Registrarse* necesita una operación atómica que no deje clientes duplicados aunque dos personas se registren a la vez (índices únicos + bloqueo). |
+| Trigger | `TRG_AUDITORIA_ESTADO_PAQUETE` | `AFTER UPDATE OF estado_reserva, estado_pago ON RESERVAS` → inserta quién (usuario y rol de la sesión), qué cambió y cuándo. | Trazabilidad de los estados que ve el cliente; funciona también si alguien cambia datos directo en SQL. |
+| Trigger | `TRG_VALIDAR_PAGO_PAQUETE` | Compound trigger en `PAGOS`: impide pagos en reservas anuladas/completadas (`-20201`) y que los aprobados superen el total (`-20202`). | Es la última barrera para el dinero: el portal permite que el cliente informe pagos y no se puede confiar solo en el frontend. |
+| Vista | `VW_PAQUETES_CLIENTE` | Paquetes del cliente **de la sesión** (`PKG_SEGURIDAD_ROLES.cliente_actual()`), con estado de ejecución, estado de pago, total, pagado, saldo y monto por validar. | El aislamiento entre clientes lo hace Oracle: aunque el backend tuviera un error, la vista nunca devuelve reservas ajenas. |
+| Vista | `VW_RESUMEN_PAQUETES_POR_ROL` | Resumen por salida (cupos, pasajeros, operaciones, guía, montos). Montos solo si el rol puede `VER_MONTOS`; el OPERADOR solo ve `POR_EMPEZAR`/`EN_CURSO`. | Un solo origen para el panel de los tres roles internos: la restricción la aplica la BD, no la pantalla. |
+| Paquete | `PKG_SEGURIDAD_ROLES` | Contexto de la sesión (`iniciar_sesion`, `usuario_actual`, `rol_actual`, `cliente_actual`), matriz `puede(rol, acción)`, `exigir`, y administración de accesos (`asignar_rol`, `revocar_acceso`, `restablecer_acceso`). | Centraliza el "quién puede qué". El backend le pregunta en cada petición y las vistas y triggers lo usan. |
+| Paquete | `PKG_GESTION_PAQUETES_CLIENTE` | `estado_ejecucion`, `pertenece`, `exigir_propietario` (`-20080`), `listar_paquetes` y `detalle_paquete` (REF CURSOR) e `iniciar_pago` (pago PENDIENTE con `registrado_por = CLIENTE`, errores `-20081`…`-20083`). | Todo lo que el cliente puede hacer pasa por aquí: lectura y un único tipo de escritura controlada. |
+
+> El script v4 original traía además `TRG_GESTION_CUPOS`, `TRG_AUTO_HISTORIAL_OP`, `V_PORTAL_CLIENTE`, `V_TABLERO_FIDS` y
+> `PKG_TRANSACCIONES`. Para cumplir "exactamente dos por categoría" esa lógica pasó al backend: los cupos se descuentan
+> con `SELECT ... FOR UPDATE` en `ReservaServiceImpl` y el historial de operaciones lo escribe `OperacionTransporteServiceImpl`.
+
+### Matriz de permisos (`PKG_SEGURIDAD_ROLES.puede`)
+
+| Acción | ADMIN | VENDEDOR | OPERADOR | CLIENTE |
+|---|:-:|:-:|:-:|:-:|
+| Usuarios (gestionar) / Auditoría | ✔ | — | — | — |
+| Ver usuarios | ✔ | ✔ | — | — |
+| Clientes (ver / crear / editar) | ✔ | ✔ | — | — |
+| Reservas (ver / gestionar) | ✔ | ✔ | — | — |
+| Ver montos · Registrar/validar pagos | ✔ | ✔ | — | — |
+| Catálogo (paquetes y salidas) | ✔ | ✔ | solo ver | — |
+| Actualizar estado de ejecución | ✔ | ✔ | ✔ | — |
+| Logística (proveedores, personal, vehículos, lugares) | ✔ | ver | ✔ | — |
+| Operaciones de tráfico | ✔ | ver | ✔ | — |
+| Resumen de paquetes | ✔ | ✔ | ✔ (sin montos, sin terminados) | — |
+| Ver paquetes propios · Informar pago | — | — | — | ✔ |
+
+## Particionamiento y roles por nivel de usuario (`03_particionamiento_roles.sql`)
+
+| Tabla | Particionada por (LIST) | Particiones | Para qué nivel |
+|---|---|---|---|
+| `AUDITORIA` | `rol_usuario` | admin · ventas · operador · cliente · sistema | El ADMIN revisa todo; cada nivel se consulta por separado. |
+| `PAGOS` | `registrado_por` | admin · ventas · cliente | Los pagos informados en el portal quedan como cola de validación de Ventas. |
+| `OPERACIONES_TRANSPORTE` | `estado` | cola del operador (PROGRAMADO, ASIGNADO, EMBARQUE, EN_RUTA) · cerradas | Cola de trabajo del Operador. `ROW MOVEMENT`: al finalizar pasa sola al histórico. |
+| `RESERVAS` | `estado_reserva` | vigentes (PENDIENTE, CONFIRMADA) · cerradas | Trabajo diario de Ventas separado de lo histórico. |
+
+Además crea `ROL_ADMIN`, `ROL_VENTAS`, `ROL_OPERADOR` y `ROL_CLIENTE` con los mismos ámbitos que la matriz
+(Ventas sin usuarios ni flota; Operador sin pagos, sin `CLIENTES` y sin montos; Cliente solo las vistas y el paquete
+del portal) para cuentas que entren directo a Oracle (reportes, SQL Developer). La aplicación usa un único usuario
+de conexión y su nivel lo controla `PKG_SEGURIDAD_ROLES`.
+
+Requisitos: opción *Partitioning* (Enterprise, XE 18c+ o 23ai Free) y `CREATE ROLE`. Si el dueño no lo tiene, un DBA ejecuta antes
+`GRANT CREATE ROLE TO LP2;`. Las conversiones usan `ALTER TABLE ... MODIFY PARTITION BY ... ONLINE UPDATE INDEXES`, sin perder datos.
+
+## Especificación de cambios de interfaz
+
+| Pantalla | Antes | Ahora |
+|---|---|---|
+| Login (`/login`) | "o entra con una cuenta demo" + 3 botones | Enlace **Registrarse**; campo "Usuario o correo" (el cliente entra con correo o documento); **Volver al inicio** se mantiene. Tras entrar: personal → `/dashboard`, cliente → `/mi-cuenta`. |
+| Registro (`/registro`, nuevo) | — | Nombre, tipo y número de documento, correo (único), teléfono con país, contraseña (**mínimo 8**, indicador de fortaleza) y **confirmación**. Errores bajo cada campo; los de unicidad vienen de Oracle. Al registrarse queda **autenticado** y va a *Mis paquetes*. |
+| Mis paquetes (`/mi-cuenta`, nuevo) | — | Tarjetas con imagen, fechas, pasajeros, total, saldo y dos insignias: ejecución y pago. Filtros Todos / Por empezar / En curso / Terminados. Saldo total por pagar. |
+| Detalle (`/mi-cuenta/paquetes/:id`, nuevo) | — | Descripción, guía, pasajeros, barra de pago (pagado / por validar / saldo), historial de pagos e **Informar un pago** (monto ≤ saldo − por validar). Una reserva ajena muestra "no pertenece a tu cuenta". |
+| Cabecera del portal | — | Logo, **Volver al inicio**, Mis paquetes y Salir en todas las pantallas del cliente. |
+| Panel (`/dashboard`) | Igual para todos | Por rol: Admin/Ventas ven KPIs de dinero, reservas recientes y todos los estados; Operador ve por empezar / en curso, pasajeros y operaciones, **sin montos**. Botones *Confirmar salida* y *Marcar terminada*. |
+| Menú lateral | 8 opciones para todos | Operador: Panel, Salidas (solo lectura), Tráfico, Logística. Las rutas comerciales tienen guard. |
+| Clientes / Pagos | — | Insignia **Cuenta web** en clientes registrados; insignia **Portal** en pagos informados por el cliente (para validarlos). |
+| Nueva reserva | Modo "Invitado (sin registro)" | Modo **Cliente nuevo** con documento: se crea el cliente (en v4 toda reserva tiene cliente) y luego puede activar su cuenta. |
+| Página de inicio | "Acceso Admin" | "Iniciar sesión" y "Registrarse" (o "Mis paquetes"/"Ir al panel" con sesión). |
+
+## Manual de integración (frontend ↔ backend ↔ Oracle)
+
+**Cómo viaja la sesión.** `POST /auth/login` o `POST /auth/registro` devuelven `{usuarioId, clienteId, username, nombre, rol, token}`.
+Angular lo guarda (`tm4_session`) y `usuario.interceptor.ts` envía `Authorization: Bearer <token>` en cada llamada; ante un 401
+borra la sesión y manda al login. En el backend, `SeguridadInterceptor` resuelve el token, decide la acción y pregunta a
+`PKG_SEGURIDAD_ROLES.puede(rol, acción)` (403 si no). `SesionOracleDataSource` llama a
+`PKG_SEGURIDAD_ROLES.iniciar_sesion(usuario, rol, cliente)` en **cada conexión del pool** antes de usarla, así las vistas y
+los triggers saben quién está operando.
+
+| Pantalla (Angular) | Servicio | Endpoint | Objeto Oracle | Roles |
+|---|---|---|---|---|
+| Registro | `AuthService.registrar` | `POST /auth/registro` | `SP_REGISTRAR_CLIENTE_EXTERNO` | público |
+| Login | `AuthService.login` | `POST /auth/login` | `CLIENTES` / `USUARIOS_SISTEMA` (BCrypt) | público |
+| Mis paquetes | `PortalService.misPaquetes` | `GET /portal/paquetes` | `VW_PAQUETES_CLIENTE` (+ `FN_ESTADO_PAGO_PAQUETE`) | CLIENTE |
+| Detalle del paquete | `PortalService.detalle` | `GET /portal/paquetes/{reservaId}` | `PKG_GESTION_PAQUETES_CLIENTE.exigir_propietario` + `detalle_paquete` | CLIENTE |
+| Informar pago | `PortalService.informarPago` | `POST /portal/paquetes/{reservaId}/pagos` | `PKG_GESTION_PAQUETES_CLIENTE.iniciar_pago` → `TRG_VALIDAR_PAGO_PAQUETE` | CLIENTE |
+| Panel | `TourStore.resumen` | `GET /resumen-paquetes` | `VW_RESUMEN_PAQUETES_POR_ROL` | ADMIN, VENDEDOR, OPERADOR |
+| Panel (botones) | `TourStore.marcarEjecucion` | `PATCH /salidas/{id}/ejecucion` `{estado: CONFIRMADA\|COMPLETADA}` | `TRG_AUDITORIA_ESTADO_PAQUETE` (reservas → COMPLETADA) | ADMIN, VENDEDOR, OPERADOR |
+| Validar pago | `TourStore` | `PATCH /pagos/{id}/resolver` | `TRG_VALIDAR_PAGO_PAQUETE`, `TRG_AUDITORIA_ESTADO_PAQUETE` | ADMIN, VENDEDOR |
+| Auditoría | — | `GET /auditoria` | `AUDITORIA` (particionada) | ADMIN |
+
+Resto de la API (bajo `/lp2_gp2/api/v1`, con token salvo lo indicado):
+
+| Recurso | Endpoints | Acción exigida |
+|---|---|---|
+| Auth | `POST /auth/login` · `POST /auth/registro` (públicos) · `POST /auth/logout` | — |
+| Catálogo | `GET /paquetes[/{id}]`, `GET /salidas[/{id}]` (públicos) · `POST/PUT/DELETE /paquetes`, `/salidas` | `GESTIONAR_CATALOGO` |
+| Clientes | `GET /clientes`, `/clientes/buscar?q=`, `/clientes/{id}` · `POST/PUT/DELETE` | `VER_CLIENTES` / `GESTIONAR_CLIENTES` |
+| Reservas | `GET /reservas[/{id}]`, `/{id}/pasajeros`, `/{id}/boleta` · `POST /reservas`, `/{id}/boleta` · `PATCH /{id}/confirmar\|completar\|anular` | `VER_RESERVAS` / `GESTIONAR_RESERVAS` |
+| Pagos | `GET /pagos[?reservaId=]` · `POST /pagos` · `PATCH /pagos/{id}/resolver` | `VER_MONTOS` / `REGISTRAR_PAGO` |
+| Logística | `/proveedores`, `/personal`, `/vehiculos`, `/lugares` (CRUD) | `VER_LOGISTICA` / `GESTIONAR_LOGISTICA` |
+| Tráfico | `GET /operaciones`, `/operaciones/estados`, `/operaciones/estimar-duracion`, `/{id}`, `/{id}/historial`, `/{id}/candidatos` · `POST /operaciones`, `/{id}/asignar-automatico` · `PUT /{id}` · `PATCH /{id}/estado`, `/{id}/asignar` | `VER_OPERACIONES` / `GESTIONAR_OPERACIONES` |
+| Usuarios | `GET /usuarios` | `VER_USUARIOS` |
+
+Errores: `{ "status", "error", "timestamp" }` — 400 validación/regla, 401 sin sesión o sesión vencida, 403 rol sin permiso,
+404 no existe, 409 duplicado. Los `RAISE_APPLICATION_ERROR` de Oracle se traducen a mensajes en español en `ErroresOracle`.
 
 ## Rediseño visual del frontend (UI/UX)
 
@@ -127,35 +178,22 @@ Las mismas reglas se aplican en ambos lados: `kampu-frontend/src/app/core/utils/
   (por ejemplo letras o la "e" en campos numéricos) y los mensajes aparecen debajo de cada campo.
 - En el backend, Bean Validation rechaza los datos con estado 400 y un mensaje claro; si llega un tipo incorrecto
   (letras o decimales en un campo entero, fechas mal escritas) se indica qué campo falló.
-- Los tipos y longitudes coinciden con `01_schema_v3.sql`; las reglas que dependen de otros datos (cupos, cruces de
+- Los tipos y longitudes coinciden con `01_schema_v4.sql`; las reglas que dependen de otros datos (cupos, cruces de
   horario, transiciones, capacidad) las valida la base de datos con sus triggers.
 
-## 1. Base de datos (Oracle 12c o superior)
+## 1. Base de datos (Oracle 12.2 o superior)
 
-1. Crea (o usa) el usuario dueño del esquema. Por defecto el backend usa `LP2` / `admin123` en `localhost:1522/XE`.
-   Necesita poder crear tablas, secuencias, vistas, paquetes y triggers (`CREATE PROCEDURE`, `CREATE TRIGGER`, `CREATE VIEW`).
-2. Conectado como ese usuario (SQL Developer o SQL*Plus), ejecuta **en orden**:
-   1. `kampu-backend/src/main/resources/db/00_reset.sql` — **solo si ya tenías la base de la versión anterior**
-      (tablas `TRANSPORTE`/`CHOFERES`) o una instalación previa de la v3. **Borra todos los datos.**
-   2. `kampu-backend/src/main/resources/db/01_schema_v3.sql` — tablas, índices, `PKG_ASIGNACION`, vistas y triggers.
-      Al final lista los objetos: todos deben salir `VALID`.
-   3. `kampu-backend/src/main/resources/db/02_extension_kampu.sql` — unicidad de teléfonos y documentos, rutas hacia
-      paquetes, coordenadas y `PKG_RUTAS`.
-   4. `kampu-backend/src/main/resources/db/03_data.sql` (opcional) — datos demo: 4 empresas, 14 lugares con coordenadas
-      reales, 11 rutas (5 hacia paquetes) con duraciones reales, 8 vehículos, 7 conductores, 9 salidas, 8 reservas y
-      9 operaciones de transporte con su historial.
+1. Usuario dueño del esquema (por defecto `LP2` / `admin123`) con permisos para crear tablas, vistas, secuencias,
+   procedimientos y triggers. Para el paso 4 también `CREATE ROLE` (`GRANT CREATE ROLE TO LP2;` como DBA).
+2. Conectado como ese usuario, ejecuta **en orden** (SQL Developer: "Ejecutar script" F5; SQL*Plus: `@archivo`):
+   1. `00_reset.sql` — solo si ya tenías una instalación anterior (v1, v3 o v4). **Borra todos los datos.**
+   2. `01_schema_v4.sql` — 14 tablas + `AUDITORIA`, índices únicos (documento, correo, teléfono), secuencia y los 8 objetos. Al final todos deben salir `VALID`.
+   3. `02_data.sql` — datos demo con **fechas relativas a hoy** (hay paquetes terminados, en curso y por empezar).
+   4. `03_particionamiento_roles.sql` — particiones y roles por nivel de usuario.
+3. En SQL*Plus, para las tildes: `set NLS_LANG=AMERICAN_AMERICA.AL32UTF8` antes de entrar.
 
-   En SQL Developer usa **"Ejecutar script" (F5)**, no "Ejecutar sentencia" (el paquete y los triggers terminan en `/`).
-   En SQL*Plus, para que las tildes se guarden bien: `set NLS_LANG=AMERICAN_AMERICA.AL32UTF8` antes de entrar.
-3. Si no cargas `03_data.sql`, al iniciar el backend se crean solos los usuarios `admin` (ADMIN), `ventas` (VENDEDOR)
-   y `operador` (OPERADOR) si la tabla está vacía.
-
-> Desde la versión anterior (con `TRANSPORTE`/`CHOFERES`) se reinstala con
-> `00_reset.sql` → `01_schema_v3.sql` → `02_extension_kampu.sql` → `03_data.sql`. Si necesitas conservar datos reales, expórtalos antes.
-
-> `03_data.sql` usa IDs fijos (para que coincidan las relaciones) y al final reinicia las identidades con
-> `ALTER TABLE ... MODIFY ... (START WITH LIMIT VALUE)`, para que los registros nuevos continúen desde el último ID.
-> Las fechas de la demo son de octubre a diciembre de 2026: si ya pasaron, crea salidas nuevas para reservar.
+> Desde la v3 se reinstala con `00_reset.sql` → `01_schema_v4.sql` → `02_data.sql` → `03_particionamiento_roles.sql`.
+> Si necesitas conservar datos reales, expórtalos antes.
 
 ### Correo (boleta informativa)
 
@@ -201,92 +239,22 @@ npm install
 npm start
 ```
 
-Abre http://localhost:4200 → usuario `admin` / `admin123` (o `ventas` / `ventas123`, `operador` / `operador123`).
+Abre http://localhost:4200. `npm start` usa `proxy.config.json`: `/api` → `http://localhost:8082/lp2_gp2/api` y
+`/lp2_gp2/images` → `http://localhost:8082`. **Orden de arranque:** Oracle → backend → frontend.
 
-`npm start` usa `proxy.config.json` (ya existía): `/api` → `http://localhost:8082/lp2_gp2/api` y
-`/lp2_gp2/images` → `http://localhost:8082`. Por eso el frontend llama a rutas relativas y no hay problemas de CORS.
-**Orden de arranque:** Oracle → backend → frontend.
+## 4. Pruebas realizadas
 
-## 4. API REST (todas bajo `/lp2_gp2/api/v1`, JSON con los mismos nombres que `core/models.ts`)
+- Oracle 23ai Free: los 4 scripts se ejecutan sin errores; los 8 objetos `VALID`; 12 particiones y 4 roles creados.
+- Backend con `ddl-auto=validate` (las entidades coinciden con el esquema) y pruebas de API por rol (200/401/403, errores de Oracle).
+- Navegador (Playwright): login sin botones demo; registro con contraseña corta, confirmación distinta y correo repetido
+  (rechazados) y registro válido con ingreso automático; cliente redirigido fuera del panel; "Volver al inicio" en
+  registro, lista y detalle; cliente ve solo sus 2 paquetes y no una reserva ajena; informar pago por encima del saldo
+  (rechazado) y válido; Operador sin montos ni acceso a Pagos; Ventas con montos e insignia "Cuenta web".
 
-Errores: `{ "status": 400, "error": "mensaje", "timestamp": ... }`
-(400 regla de negocio/validación/login incorrecto, 404 no existe, 409 duplicado).
+## 5. Limitaciones y decisiones
 
-| Recurso | Endpoints |
-|---|---|
-| Auth | `POST /auth/login` `{username,password}` → `usuario` |
-| Usuarios | `GET /usuarios` (sin `password_hash`) |
-| Paquetes | `GET/POST /paquetes` · `GET/PUT/DELETE /paquetes/{id}` · `POST /paquetes/imagen` (multipart `file`) → `{imagen}` |
-| Guías | `GET/POST /guias` · `GET/PUT/DELETE /guias/{id}` |
-| Empresas de transporte | `GET/POST /empresas` · `GET/PUT/DELETE /empresas/{id}` (incluye `totalVehiculos`, `capacidadTotalTransporte`, `conductoresDisponibles` de `VW_EMPRESA_CAPACIDAD`) |
-| Lugares | `GET/POST /lugares` · `GET/PUT/DELETE /lugares/{id}` (con `latitud`/`longitud`) |
-| Rutas | `GET/POST /rutas` · `GET/PUT/DELETE /rutas/{id}` · `GET /rutas/estimar-duracion?origenId=&destinoId=&tipoServicio=`. Con `paqueteId`, el POST pide `fechaSalida`, `cuposSalida` (y `guiaSalidaId` opcional), crea la salida y devuelve `salidaCreadaId`. `duracionEstimadaMin` vacía = se calcula. |
-| Vehículos | `GET/POST /vehiculos` · `GET/PUT/DELETE /vehiculos/{id}` |
-| Conductores | `GET/POST /conductores` · `GET/PUT/DELETE /conductores/{id}` |
-| Operaciones (tráfico) | `GET /operaciones[?salidaId=]` · `GET /operaciones/estados` (estados y transiciones) · `GET/POST /operaciones` · `GET/PUT /operaciones/{id}` · `PATCH /operaciones/{id}/estado` `{estado, observacion}` · `POST /operaciones/{id}/asignar-automatico` · `PATCH /operaciones/{id}/asignar` `{vehiculoId, conductorId}` · `GET /operaciones/{id}/candidatos` · `GET /operaciones/{id}/recursos-disponibles` · `GET /operaciones/{id}/historial`. Encabezado opcional `X-Usuario`. |
-| Clientes | `GET/POST /clientes` · `GET/PUT/DELETE /clientes/{id}` · `GET /clientes/buscar?q=` (autocompletado: nombre, documento o correo; máx. 8) |
-| Salidas | `GET/POST /salidas` · `GET/PUT/DELETE /salidas/{id}` (sin `fechaFin` en el cuerpo: la calcula el trigger; devuelve `operaciones` y `faltanteTransporte`) |
-| Reservas | `GET/POST /reservas` (POST incluye `salidaId`, `pasajeros[]` y `clienteId` **o** `contacto {nombre, email, telefono}` para invitados) · `GET /reservas/{id}/boleta` (HTML) · `POST /reservas/{id}/boleta` (envía por correo) · `GET /reservas/{id}` · `GET /reservas/{id}/pasajeros` · `PATCH /reservas/{id}/confirmar` · `PATCH /reservas/{id}/completar` · `PATCH /reservas/{id}/anular` `{formaReembolso, usuarioId}` (obligatorio) |
-| Pasajeros | `GET /pasajeros[?reservaId=]` |
-| Pagos | `GET /pagos[?reservaId=]` · `POST /pagos` · `PATCH /pagos/{id}/resolver` `{estado: APROBADO\|RECHAZADO}` (devuelven `tipoCambio` y `montoPen`) |
-
-Reglas que aplica el **backend** (además de las de la base de datos, ver "Versión 3"):
-`monto_pagado` = suma de `PAGOS.monto_pen` APROBADOS y `estado_pago` se deriva (PENDIENTE/PARCIAL/PAGADO);
-un pago aprobado no puede exceder el saldo; anular con dinero pagado exige `forma_reembolso`, marca los pagos como
-REEMBOLSADO y guarda `usuario_anula_id` (el usuario logueado que envía el frontend); no se reserva una salida que ya
-inició; sin cruce de guía en fechas; documento único por reserva; fecha de nacimiento < hoy; vehículo y conductor se
-asignan juntos; no se eliminan registros en uso (cliente con reservas, paquete/guía con salidas, salida con reservas u
-operaciones, empresa con flota/rutas/operaciones, vehículo/conductor/ruta/lugar con operaciones).
-La aplicación registra **una salida por reserva** (un `DETALLE_RESERVA`); el esquema admite varias.
-
-## 5. Compatibilidad verificada
-
-| Elemento | Frontend | Backend | Base de datos |
-|---|---|---|---|
-| Tablas y vistas | `core/models.ts` | 17 entidades `@Table` + 3 vistas `@Immutable` (validadas con `ddl-auto=validate`) | 17 tablas y 4 vistas de `01_schema_v3.sql` |
-| Columnas | camelCase (`fechaInicio`) | `@Column(name="fecha_inicio")` | snake_case |
-| Fechas `DATE` | `'yyyy-MM-dd'` | `LocalDate` | `DATE` |
-| `TIMESTAMP` | string ISO | `LocalDateTime` | `TIMESTAMP` |
-| Montos | `number` | `BigDecimal` (10,2) | `NUMBER(10,2)` |
-| Estados / monedas / tipo doc. | tipos unión TS | `@Pattern` con los mismos valores | `CHECK ... IN (...)` y `DOMINIO_ESTADOS` |
-| `DATE` con hora (operaciones) | `'yyyy-MM-ddTHH:mm'` | `LocalDateTime` | `DATE` |
-| Longitudes | `maxlength` en los formularios | `@Size` | `VARCHAR2(n)` |
-| Opcionales vacíos | `''` | `''` ↔ `NULL` (Oracle guarda `''` como NULL) | columnas sin `NOT NULL` |
-| Tipos de cambio | `core/utils/moneda.ts` (`TASAS`) | constantes en `ConversorMoneda.java` | — (deben coincidir) |
-
-## 6. Hallazgos y cómo se resolvieron
-
-0. **v3 (este cambio):** ver la sección "Versión 3" (ajuste de SQL*Plus en `01_schema_v3.sql`, roles `VENDEDOR`/`OPERADOR`,
-   `fecha_fin` calculada por trigger). El `application.yaml` ahora sí lee `DB_URL`, `DB_USERNAME` y `DB_PASSWORD`
-   (la tabla de la sección 2 ya los mencionaba pero el archivo tenía los valores fijos).
-
-Historial de versiones anteriores:
-
-1. **El ZIP del backend era otra aplicación.** Contenía una plantilla de e-commerce (`producto`, `pedidos`, `persona`,
-   `usuario`) sin relación con el script ni con el frontend, y con `ddl-auto: update` (habría creado esas tablas en tu esquema).
-   Se reemplazó por el backend del sistema de tours, conservando el proyecto `lp2_gp2`: paquete `pe.edu.upeu.lp2_gp2`,
-   estructura `controller/services/repository/entity/dto/exception/config`, puerto 8082, context-path `/lp2_gp2`,
-   Swagger, CORS y el servicio de imágenes. El ZIP también traía el frontend antiguo de e-commerce; aquí se usa el nuevo.
-2. **El script no se ejecuta en Oracle tal cual.** `CONSTRAINT chk_pas_fecha_nac CHECK (fecha_nacimiento < SYSDATE)`
-   produce **ORA-02436** (Oracle no permite `SYSDATE` en un CHECK). Era el único cambio en el `01_schema.sql` anterior: esa línea quedaba
-   comentada y la regla se aplicaba con el trigger `TRG_PAS_FECHA_NAC`. En la v3 ese trigger no existe: la valida el backend.
-3. **El frontend no tenía backend** (guardaba todo en `localStorage`). Cambios en el frontend, sin tocar HTML ni CSS:
-   - `TourStore` ahora llama a la API (signals con los datos; las escrituras devuelven el `Observable` de `HttpClient`).
-   - `AuthService` hace login contra el backend y guarda el usuario en `localStorage`.
-   - `ImagenService` sube la imagen al backend (antes la guardaba en `localStorage`).
-   - Componentes: `subscribe({ next, error })` en guardar/eliminar, carga inicial en el shell y recarga directa de `/reservas/:id`.
-   - Eliminados `core/data/seed.ts` (pasó a `02_data.sql`), `local-store.ts` y `hash.ts`.
-4. **Contraseñas:** se guardan en texto plano en `password_hash` y se comparan en el backend (todavía no se ve el tema
-   de seguridad: sin interceptor, token ni BCrypt).
-
-## 7. Pendientes / decisiones a confirmar
-
-- **Roles:** `ADMIN`, `VENDEDOR` y `OPERADOR` tienen hoy los mismos permisos (el frontend no los diferencia). Si se
-  necesita, se puede restringir por rol (por ejemplo, que solo `OPERADOR`/`ADMIN` cambien estados de tráfico).
-- **Parámetros de asignación:** el tope de 10 h de conducción por día y el margen de 30 min entre servicios están en las
-  constantes `c_max_horas_dia` y `c_margen_min` de `PKG_ASIGNACION` (ajústalas a la norma MTC).
-- **Detalle múltiple:** el esquema permite varias salidas por reserva; la pantalla de nueva reserva crea una sola.
-- **Tipos de cambio fijos:** `TASAS` (frontend) y `ConversorMoneda` (backend) deben mantenerse iguales.
-- **Producción:** `ng build` genera archivos estáticos que llaman a `/api/v1` y `/lp2_gp2/images` en el mismo origen;
-  hay que servirlos detrás de un proxy (Nginx/Apache) que redirija esas rutas al backend.
-- La hora de `fecha_reserva` / `fecha_pago` es la del servidor donde corre el backend.
+- El token es opaco y vive en memoria del backend: al reiniciar el backend hay que volver a iniciar sesión.
+- La v4 no tiene tabla de rutas: la asignación automática de transporte no filtra por región del proveedor.
+- Los tipos de cambio son fijos: `TASAS` (frontend) y `ConversorMoneda` (backend) deben coincidir.
+- La duración de los traslados usa OSRM (`OSRM_URL`) y, si no responde, distancia en línea recta con velocidad media.
+- Producción: servir `ng build` detrás de un proxy (Nginx/Apache) que envíe `/api/v1` y `/lp2_gp2/images` al backend.

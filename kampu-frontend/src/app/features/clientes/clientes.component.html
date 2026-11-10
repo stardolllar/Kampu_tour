@@ -25,6 +25,7 @@
               <div class="flex items-center gap-3">
                 <div class="avatar w-9 h-9 text-xs bg-gradient-to-br from-brand-50 to-brand-100 text-brand-800 ring-1 ring-brand-100">{{ f.cliente.nombreCompleto.slice(0, 1) }}</div>
                 <span class="font-semibold text-zinc-900">{{ f.cliente.nombreCompleto }}</span>
+                @if (f.cliente.cuentaWeb) { <span class="chip !bg-brand-50 !text-brand-700" title="Se registró en el portal">Cuenta web</span> }
               </div>
             </td>
             <td class="td"><span class="chip">{{ f.cliente.tipoDocumento }}</span></td>

@@ -8,8 +8,8 @@ import pe.edu.upeu.lp2_gp2.entity.Vehiculo;
 import pe.edu.upeu.lp2_gp2.exception.BusinessException;
 import pe.edu.upeu.lp2_gp2.exception.DuplicateResourceException;
 import pe.edu.upeu.lp2_gp2.exception.ResourceNotFoundException;
-import pe.edu.upeu.lp2_gp2.repository.EmpresaTransporteRepository;
 import pe.edu.upeu.lp2_gp2.repository.OperacionTransporteRepository;
+import pe.edu.upeu.lp2_gp2.repository.ProveedorRepository;
 import pe.edu.upeu.lp2_gp2.repository.VehiculoRepository;
 
 import java.util.List;
@@ -18,13 +18,13 @@ import java.util.Optional;
 @Service
 public class VehiculoServiceImpl implements IVehiculoService {
     private final VehiculoRepository vehiculoRepository;
-    private final EmpresaTransporteRepository empresaRepository;
+    private final ProveedorRepository proveedorRepository;
     private final OperacionTransporteRepository operacionRepository;
 
-    public VehiculoServiceImpl(VehiculoRepository vehiculoRepository, EmpresaTransporteRepository empresaRepository,
+    public VehiculoServiceImpl(VehiculoRepository vehiculoRepository, ProveedorRepository proveedorRepository,
                                OperacionTransporteRepository operacionRepository) {
         this.vehiculoRepository = vehiculoRepository;
-        this.empresaRepository = empresaRepository;
+        this.proveedorRepository = proveedorRepository;
         this.operacionRepository = operacionRepository;
     }
 
@@ -52,8 +52,8 @@ public class VehiculoServiceImpl implements IVehiculoService {
     @Transactional
     public VehiculoDTO actualizar(Long id, VehiculoRequestDTO dto) {
         Vehiculo v = obtener(id);
-        if (!v.getEmpresaId().equals(dto.empresaId()) && operacionRepository.existsByVehiculoId(id)) {
-            throw new BusinessException("El vehículo tiene operaciones registradas: no puede cambiar de empresa.");
+        if (!v.getProveedorId().equals(dto.proveedorId()) && operacionRepository.existsByVehiculoId(id)) {
+            throw new BusinessException("El vehículo tiene operaciones registradas: no puede cambiar de proveedor.");
         }
         copiar(dto, v, id);
         return VehiculoDTO.desde(vehiculoRepository.saveAndFlush(v));
@@ -64,7 +64,7 @@ public class VehiculoServiceImpl implements IVehiculoService {
     public void eliminar(Long id) {
         Vehiculo v = obtener(id);
         if (operacionRepository.existsByVehiculoId(id)) {
-            throw new BusinessException("El vehículo tiene operaciones registradas. Puedes marcarlo como FUERA_DE_SERVICIO.");
+            throw new BusinessException("El vehículo tiene operaciones registradas. Puedes marcarlo como INACTIVO.");
         }
         vehiculoRepository.delete(v);
     }
@@ -75,18 +75,18 @@ public class VehiculoServiceImpl implements IVehiculoService {
     }
 
     private void copiar(VehiculoRequestDTO dto, Vehiculo v, Long id) {
-        if (!empresaRepository.existsById(dto.empresaId())) throw new BusinessException("La empresa seleccionada no existe.");
+        if (!proveedorRepository.existsById(dto.proveedorId())) throw new BusinessException("El proveedor seleccionado no existe.");
         String placa = dto.placa().trim().toUpperCase();
         Optional<Vehiculo> mismo = vehiculoRepository.findByPlacaIgnoreCase(placa);
         if (mismo.isPresent() && !mismo.get().getVehiculoId().equals(id)) {
             throw new DuplicateResourceException("Ya existe un vehículo con la placa " + placa + ".");
         }
-        v.setEmpresaId(dto.empresaId());
+        v.setProveedorId(dto.proveedorId());
         v.setPlaca(placa);
         v.setTipoVehiculo(dto.tipoVehiculo());
         v.setMarcaModelo(dto.marcaModelo() == null || dto.marcaModelo().isBlank() ? null : dto.marcaModelo().trim());
         v.setCapacidadPax(dto.capacidadPax());
-        v.setFechaProxMantenimiento(dto.fechaProxMantenimiento());
-        v.setEstadoOperativo(dto.estadoOperativo());
+        v.setProxMantenimiento(dto.proxMantenimiento());
+        v.setEstado(dto.estado());
     }
 }

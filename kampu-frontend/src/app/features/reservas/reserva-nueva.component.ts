@@ -27,17 +27,22 @@ export class ReservaNuevaComponent implements OnInit {
   private route = inject(ActivatedRoute);
 
   tipos: TipoDocumento[] = ['DNI', 'CE', 'PASAPORTE'];
-  // 'registrado': cliente existente (buscador) · 'invitado': solo nombre, correo y teléfono
+  // 'registrado': cliente existente (buscador) · 'invitado': cliente nuevo (se crea al guardar la reserva)
   modo: 'registrado' | 'invitado' = 'registrado';
   cliente: Cliente | null = null;
-  contacto: ContactoReserva = { nombre: '', email: '', telefono: '' };
+  contacto: ContactoReserva = { nombre: '', tipoDocumento: 'DNI', numeroDocumento: '', email: '', telefono: '' };
   salidaId: number | null = null;
   observaciones = '';
   pasajeros: PasajeroDraft[] = [this.vacio()];
   v = new FormValidacion(() => {
     const e: Errores = {
       cliente: this.modo === 'registrado' && !this.cliente ? 'Busca y selecciona un cliente.' : null,
-      cNombre: this.modo === 'invitado' ? V.nombrePersona(this.contacto.nombre, 'El nombre del contacto') : null,
+      cNombre: this.modo === 'invitado' ? V.nombrePersona(this.contacto.nombre, 'El nombre del cliente') : null,
+      cDocumento: this.modo === 'invitado'
+        ? V.documento(this.contacto.tipoDocumento, this.contacto.numeroDocumento)
+          ?? (this.store.clientes().some(c => c.numeroDocumento.toUpperCase() === this.contacto.numeroDocumento.trim().toUpperCase())
+            ? 'Ya existe un cliente con ese documento: búscalo como registrado.' : null)
+        : null,
       cEmail: this.modo === 'invitado'
         ? (this.contacto.email.trim() ? V.email(this.contacto.email) : 'El correo es obligatorio para enviarle la boleta.') : null,
       cTelefono: this.modo === 'invitado' ? errorTelefonoPais(this.contacto.telefono) : null,
@@ -141,7 +146,8 @@ export class ReservaNuevaComponent implements OnInit {
                nacionalidad: 'Peruana', fechaNacimiento: '' };
     } else {
       if (!this.contacto.nombre.trim()) return;
-      dato = { nombreCompleto: this.contacto.nombre.trim(), tipoDocumento: 'DNI', numeroDocumento: '', nacionalidad: 'Peruana', fechaNacimiento: '' };
+      dato = { nombreCompleto: this.contacto.nombre.trim(), tipoDocumento: this.contacto.tipoDocumento,
+               numeroDocumento: this.contacto.numeroDocumento.trim(), nacionalidad: 'Peruana', fechaNacimiento: '' };
     }
     if (this.primeroVacio()) this.pasajeros[0] = dato;
     else this.pasajeros.push(dato);
@@ -157,7 +163,8 @@ export class ReservaNuevaComponent implements OnInit {
     this.store.ocupado.set(true);
     const clienteId = this.modo === 'registrado' ? this.cliente!.clienteId : null;
     const contacto: ContactoReserva | null = this.modo === 'invitado'
-      ? { nombre: this.contacto.nombre.trim(), email: this.contacto.email.trim(), telefono: this.contacto.telefono.trim() }
+      ? { nombre: this.contacto.nombre.trim(), tipoDocumento: this.contacto.tipoDocumento, numeroDocumento: this.contacto.numeroDocumento.trim(),
+          email: this.contacto.email.trim().toLowerCase(), telefono: this.contacto.telefono.trim() }
       : null;
     this.store.crearReserva(clienteId, contacto, this.salidaId!, this.observaciones.trim(), lista).subscribe({
       next: (reserva) => {

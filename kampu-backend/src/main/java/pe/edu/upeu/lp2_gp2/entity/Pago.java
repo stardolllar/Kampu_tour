@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.DynamicUpdate;
 
+// TRG_VALIDAR_PAGO_PAQUETE impide pagar reservas cerradas o aprobar más que el total
 @Entity
 @DynamicUpdate
 @Table(name = "PAGOS")
@@ -23,7 +24,6 @@ public class Pago {
     @Column(name = "moneda", length = 10)
     private String moneda;
 
-    // Soles por unidad de la moneda (1 para PEN)
     @Column(name = "tipo_cambio", nullable = false, precision = 8, scale = 4)
     private BigDecimal tipoCambio;
 
@@ -42,6 +42,10 @@ public class Pago {
 
     @Column(name = "estado_transaccion", length = 20)
     private String estadoTransaccion;
+
+    // ADMIN / VENDEDOR / CLIENTE: clave de partición de PAGOS
+    @Column(name = "registrado_por", length = 20)
+    private String registradoPor;
 
     public Pago() {
     }
@@ -124,5 +128,13 @@ public class Pago {
 
     public void setEstadoTransaccion(String estadoTransaccion) {
         this.estadoTransaccion = estadoTransaccion;
+    }
+
+    public String getRegistradoPor() {
+        return registradoPor;
+    }
+
+    public void setRegistradoPor(String registradoPor) {
+        this.registradoPor = registradoPor;
     }
 }

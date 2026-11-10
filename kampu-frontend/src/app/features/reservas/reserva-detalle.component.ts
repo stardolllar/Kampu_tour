@@ -52,10 +52,9 @@ export class ReservaDetalleComponent {
     return s ? this.store.operacionesDe(s.salidaId).filter(o => o.estadoActual !== 'CANCELADO') : [];
   });
   cliente = computed(() => this.store.getCliente(this.reserva()?.clienteId));
-  invitado = computed(() => this.store.esInvitado(this.reserva()));
   nombreCliente = computed(() => this.store.nombreCliente(this.reserva()));
-  emailCliente = computed(() => this.invitado() ? this.reserva()?.contactoEmail ?? '' : this.cliente()?.email ?? '');
-  telefonoCliente = computed(() => this.invitado() ? this.reserva()?.contactoTelefono ?? '' : this.cliente()?.telefono ?? '');
+  emailCliente = computed(() => this.cliente()?.email ?? '');
+  telefonoCliente = computed(() => this.cliente()?.telefono ?? '');
   enviandoBoleta = false;
   pasajeros = computed(() => this.store.pasajerosDe(this.id));
   pagos = computed(() => this.store.pagosDe(this.id));
@@ -123,8 +122,18 @@ export class ReservaDetalleComponent {
     this.ejecutar(this.store.anularReserva(this.id, forma), 'Reserva anulada');
   }
 
+  // La boleta se pide con el token de la sesión y se abre en una pestaña nueva
   verBoleta() {
-    window.open(this.store.urlBoleta(this.id), '_blank', 'noopener');
+    const ventana = window.open('', '_blank');
+    this.store.verBoleta(this.id).subscribe({
+      next: html => {
+        if (!ventana) return;
+        ventana.document.open();
+        ventana.document.write(html);
+        ventana.document.close();
+      },
+      error: err => { ventana?.close(); this.alerts.error(this.store.error(err)); }
+    });
   }
 
   async enviarBoleta() {

@@ -4,7 +4,7 @@
     <h1 class="h1">Salidas programadas</h1>
     <p class="page-sub">Fechas, cupos y guía de cada salida. El transporte se asigna por tramo en Tráfico.</p>
   </div>
-  <button type="button" class="btn-dark" (click)="nuevo()"><app-icon name="plus" size="w-4 h-4" /> Nueva salida</button>
+  @if (editable) { <button type="button" class="btn-dark" (click)="nuevo()"><app-icon name="plus" size="w-4 h-4" /> Nueva salida</button> }
 </div>
 
 <div class="toolbar">
@@ -42,10 +42,12 @@
             </td>
             <td class="td"><app-badge [estado]="f.salida.estado" /></td>
             <td class="td text-right whitespace-nowrap">
+              @if (editable) {
               <div class="actions">
                 <button type="button" class="icon-btn" title="Editar" (click)="editar(f.salida.salidaId)"><app-icon name="edit" size="w-[18px] h-[18px]" /></button>
                 <button type="button" class="icon-btn-danger" title="Eliminar" (click)="eliminar(f.salida.salidaId)"><app-icon name="trash" size="w-[18px] h-[18px]" /></button>
               </div>
+              }
             </td>
           </tr>
         } @empty {
@@ -95,7 +97,7 @@
         <div>
           <select class="field" [(ngModel)]="form.guiaId" aria-label="Guía">
             <option [ngValue]="null">Sin asignar</option>
-            @for (g of store.guias(); track g.guiaId) { <option [ngValue]="g.guiaId">{{ g.nombreCompleto }}</option> }
+            @for (g of store.guias(); track g.personalId) { <option [ngValue]="g.personalId">{{ g.nombreCompleto }} · {{ store.nombreProveedor(g.proveedorId) }}</option> }
           </select>
           <p class="hint">Vehículos y conductores se asignan a cada operación (aeropuerto → hotel, hotel → atractivo…) en <a class="link" routerLink="/operaciones">Tráfico</a>.</p>
         </div>

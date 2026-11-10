@@ -2,17 +2,19 @@ package pe.edu.upeu.lp2_gp2.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
-@Table(name = "VEHICULO")
+@DynamicUpdate
+@Table(name = "VEHICULOS")
 public class Vehiculo {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "vehiculo_id")
     private Long vehiculoId;
 
-    @Column(name = "empresa_id", nullable = false)
-    private Long empresaId;
+    @Column(name = "proveedor_id", nullable = false)
+    private Long proveedorId;
 
     @Column(name = "placa", nullable = false, length = 10)
     private String placa;
@@ -26,11 +28,11 @@ public class Vehiculo {
     @Column(name = "capacidad_pax", nullable = false)
     private Integer capacidadPax;
 
-    @Column(name = "fecha_prox_mantenimiento", nullable = false)
-    private LocalDate fechaProxMantenimiento;
+    @Column(name = "prox_mantenimiento")
+    private LocalDate proxMantenimiento;
 
-    @Column(name = "estado_operativo", nullable = false, length = 20)
-    private String estadoOperativo;
+    @Column(name = "estado", length = 20)
+    private String estado;
 
     public Vehiculo() {
     }
@@ -43,12 +45,12 @@ public class Vehiculo {
         this.vehiculoId = vehiculoId;
     }
 
-    public Long getEmpresaId() {
-        return empresaId;
+    public Long getProveedorId() {
+        return proveedorId;
     }
 
-    public void setEmpresaId(Long empresaId) {
-        this.empresaId = empresaId;
+    public void setProveedorId(Long proveedorId) {
+        this.proveedorId = proveedorId;
     }
 
     public String getPlaca() {
@@ -83,19 +85,19 @@ public class Vehiculo {
         this.capacidadPax = capacidadPax;
     }
 
-    public LocalDate getFechaProxMantenimiento() {
-        return fechaProxMantenimiento;
+    public LocalDate getProxMantenimiento() {
+        return proxMantenimiento;
     }
 
-    public void setFechaProxMantenimiento(LocalDate fechaProxMantenimiento) {
-        this.fechaProxMantenimiento = fechaProxMantenimiento;
+    public void setProxMantenimiento(LocalDate proxMantenimiento) {
+        this.proxMantenimiento = proxMantenimiento;
     }
 
-    public String getEstadoOperativo() {
-        return estadoOperativo;
+    public String getEstado() {
+        return estado;
     }
 
-    public void setEstadoOperativo(String estadoOperativo) {
-        this.estadoOperativo = estadoOperativo;
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 }

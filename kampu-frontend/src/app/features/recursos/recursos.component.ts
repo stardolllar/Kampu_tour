@@ -3,21 +3,26 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import {
-  CategoriaLicencia, ConductorForm, EstimacionDuracion, DisponibilidadOperativa, EmpresaForm, EstadoAfiliacion, EstadoConductor,
-  EstadoOperativo, EstadoRuta, GuiaForm, Lugar, LugarForm, RutaForm, TipoLugar, TipoServicio, TipoVehiculo, VehiculoForm
+  CategoriaLicencia, EstadoPersonal, EstadoProveedor, EstadoVehiculo, Lugar, LugarForm, PersonalForm, ProveedorForm,
+  RolPersonal, TipoLugar, TipoVehiculo, VehiculoForm
 } from '../../core/models';
 import { TourStore } from '../../core/services/tour-store.service';
 import { AlertService } from '../../core/services/alert.service';
+import { AuthService } from '../../core/services/auth.service';
 import { IconComponent } from '../../shared/icon.component';
 import { BadgeComponent } from '../../shared/badge.component';
 import { filtrarEscritura, filtrarPegado, sinRueda } from '../../core/utils/filtro';
 import { FormValidacion, telefonoRepetido, V } from '../../core/utils/validacion';
-import { duracion, etiqueta } from '../../core/utils/etiquetas';
+import { etiqueta } from '../../core/utils/etiquetas';
 import { addDays, hoy } from '../../core/utils/date.util';
 import { ModalComponent } from '../../shared/modal.component';
 
-type Tab = 'guias' | 'empresas' | 'vehiculos' | 'conductores' | 'lugares' | 'rutas';
+type Tab = 'proveedores' | 'personal' | 'vehiculos' | 'lugares';
 
+/**
+ * Logística v4: PROVEEDORES (Kampu Tours propio + terceros), PERSONAL (guías y conductores),
+ * VEHICULOS y LUGARES. La flota y el personal propios cuelgan de Kampu Tours.
+ */
 @Component({
   selector: 'app-recursos',
   standalone: true,
@@ -28,81 +33,77 @@ type Tab = 'guias' | 'empresas' | 'vehiculos' | 'conductores' | 'lugares' | 'rut
 export class RecursosComponent {
   store = inject(TourStore);
   private alerts = inject(AlertService);
+  private auth = inject(AuthService);
 
   tabs: { id: Tab; texto: string; icono: string; singular: string }[] = [
-    { id: 'guias', texto: 'Guías', icono: 'user', singular: 'guía' },
-    { id: 'empresas', texto: 'Empresas', icono: 'flag', singular: 'empresa de transporte' },
+    { id: 'proveedores', texto: 'Proveedores', icono: 'flag', singular: 'proveedor' },
+    { id: 'personal', texto: 'Personal', icono: 'id', singular: 'guía o conductor' },
     { id: 'vehiculos', texto: 'Vehículos', icono: 'truck', singular: 'vehículo' },
-    { id: 'conductores', texto: 'Conductores', icono: 'id', singular: 'conductor' },
-    { id: 'lugares', texto: 'Lugares', icono: 'map-pin', singular: 'lugar' },
-    { id: 'rutas', texto: 'Rutas', icono: 'compass', singular: 'ruta' }
+    { id: 'lugares', texto: 'Lugares', icono: 'map-pin', singular: 'lugar' }
   ];
-  categorias: CategoriaLicencia[] = ['A-IIa', 'A-IIb', 'A-IIIa', 'A-IIIb', 'A-IIIc'];
-  afiliaciones: EstadoAfiliacion[] = ['PENDIENTE', 'ACTIVA', 'SUSPENDIDA', 'RETIRADA'];
-  disponibilidades: DisponibilidadOperativa[] = ['DISPONIBLE', 'LIMITADA', 'NO_DISPONIBLE'];
+  categorias: CategoriaLicencia[] = ['A-I', 'A-IIa', 'A-IIb', 'A-IIIa', 'A-IIIb', 'A-IIIc'];
+  estadosProveedor: EstadoProveedor[] = ['ACTIVO', 'INACTIVO', 'SUSPENDIDO'];
+  roles: RolPersonal[] = ['GUIA', 'CONDUCTOR', 'AMBOS'];
+  estadosPersonal: EstadoPersonal[] = ['DISPONIBLE', 'OCUPADO', 'INACTIVO'];
   tiposVehiculo: TipoVehiculo[] = ['AUTO', 'CAMIONETA_4X4', 'VAN', 'MINIBUS', 'BUS'];
-  estadosVehiculo: EstadoOperativo[] = ['OPERATIVO', 'EN_MANTENIMIENTO', 'FUERA_DE_SERVICIO'];
-  estadosConductor: EstadoConductor[] = ['DISPONIBLE', 'DESCANSO', 'VACACIONES', 'INACTIVO'];
+  estadosVehiculo: EstadoVehiculo[] = ['OPERATIVO', 'MANTENIMIENTO', 'INACTIVO'];
   tiposLugar: TipoLugar[] = ['AEROPUERTO', 'TERMINAL', 'HOTEL', 'ATRACTIVO', 'CIUDAD', 'OTRO'];
-  tiposServicio: TipoServicio[] = ['TRASLADO', 'TOUR', 'INTERPROVINCIAL'];
-  estadosRuta: EstadoRuta[] = ['ACTIVA', 'INACTIVA'];
   etiqueta = etiqueta;
-  duracion = duracion;
   hoy = hoy();
   pronto = addDays(hoy(), 30);
 
-  tab = signal<Tab>('guias');
-  filtroEmpresa = signal<number | null>(null);
+  tab = signal<Tab>('proveedores');
+  filtroProveedor = signal<number | null>(null);
+  filtroRol = signal<'' | RolPersonal>('');
   abierto = signal(false);
   editId: number | null = null;
 
-  guia: GuiaForm = this.guiaVacia();
-  empresa: EmpresaForm = this.empresaVacia();
+  proveedor: ProveedorForm = this.proveedorVacio();
+  persona: PersonalForm = this.personaVacia();
   vehiculo: VehiculoForm = this.vehiculoVacio();
-  conductor: ConductorForm = this.conductorVacio();
   lugar: LugarForm = this.lugarVacio();
-  ruta: RutaForm = this.rutaVacia();
+
+  // Solo ADMIN y OPERADOR gestionan la logística; Ventas la consulta
+  puedeEditar = computed(() => ['ADMIN', 'OPERADOR'].includes(this.auth.rol() ?? ''));
 
   v = new FormValidacion(() => {
     switch (this.tab()) {
-      case 'guias': return {
-        gNombre: V.nombrePersona(this.guia.nombreCompleto),
-        gEspecialidad: V.texto(this.guia.especialidad, 'La especialidad', 100),
-        gTelefono: V.telefono(this.guia.telefono)
-          ?? (telefonoRepetido(this.guia.telefono, this.store.guias(), g => g.telefono, g => g.guiaId === this.editId)
-            ? 'Ese teléfono ya está registrado para otro guía.' : null)
-      };
-      case 'empresas': return {
-        eNombre: V.texto(this.empresa.nombreComercial, 'El nombre comercial', 150, true),
-        eRuc: V.ruc(this.empresa.ruc),
-        eContacto: this.empresa.contactoNombre.trim() ? V.nombrePersona(this.empresa.contactoNombre, 'El nombre del contacto') : null,
-        eTelefono: !this.empresa.contactoTelefono.trim() ? 'El teléfono de contacto es obligatorio.'
-          : V.telefono(this.empresa.contactoTelefono)
-            ?? (telefonoRepetido(this.empresa.contactoTelefono, this.store.empresas(), e => e.contactoTelefono, e => e.empresaId === this.editId)
-              ? 'Ese teléfono ya está registrado para otra empresa.' : null),
-        eEmail: V.email(this.empresa.contactoEmail),
-        eDireccion: V.texto(this.empresa.direccion, 'La dirección', 250)
-      };
+      case 'proveedores': {
+        const p = this.proveedor;
+        return {
+          pNombre: V.texto(p.nombreComercial, 'El nombre comercial', 150, true),
+          pRuc: V.ruc(p.ruc),
+          pTelefono: V.telefono(p.telefono)
+            ?? (telefonoRepetido(p.telefono, this.store.proveedores(), x => x.telefono, x => x.proveedorId === this.editId)
+              ? 'Ese teléfono ya está registrado para otro proveedor.' : null),
+          pPropio: p.esPropio && this.store.proveedores().some(x => x.esPropio && x.proveedorId !== this.editId)
+            ? 'Ya existe el proveedor propio (Kampu Tours).' : null
+        };
+      }
+      case 'personal': {
+        const p = this.persona;
+        const conduce = p.rol !== 'GUIA';
+        const lic = p.numLicencia.trim();
+        return {
+          rProveedor: p.proveedorId ? null : 'Selecciona el proveedor.',
+          rNombre: V.nombrePersona(p.nombreCompleto),
+          rTelefono: V.telefono(p.telefono)
+            ?? (telefonoRepetido(p.telefono, this.store.personal(), x => x.telefono, x => x.personalId === this.editId)
+              ? 'Ese teléfono ya está registrado para otra persona.' : null),
+          rLicencia: !conduce && !lic ? null
+            : (!lic ? 'Quien conduce necesita número de licencia.'
+              : (/^[A-Za-z0-9]{6,20}$/.test(lic) ? null : 'La licencia solo admite letras y números (6 a 20 caracteres).')),
+          rCategoria: conduce && !p.catLicencia ? 'Elige la categoría de la licencia.' : null,
+          rVencimiento: conduce ? V.fecha(p.vencLicencia, 'La fecha de vencimiento') : null
+        };
+      }
       case 'vehiculos': return {
-        vEmpresa: this.vehiculo.empresaId ? null : 'Selecciona la empresa.',
+        vProveedor: this.vehiculo.proveedorId ? null : 'Selecciona el proveedor.',
         vPlaca: V.placa(this.vehiculo.placa),
         vMarca: V.texto(this.vehiculo.marcaModelo, 'La marca/modelo', 100),
         vCapacidad: V.entero(this.vehiculo.capacidadPax, 'La capacidad', 1, 999),
-        vMantenimiento: V.fecha(this.vehiculo.fechaProxMantenimiento, 'La fecha del próximo mantenimiento')
+        vMantenimiento: V.fecha(this.vehiculo.proxMantenimiento, 'La fecha del próximo mantenimiento', false)
       };
-      case 'conductores': {
-        const lic = this.conductor.numeroLicencia.trim();
-        return {
-          cEmpresa: this.conductor.empresaId ? null : 'Selecciona la empresa.',
-          cNombre: V.nombrePersona(this.conductor.nombres),
-          cLicencia: !lic ? 'El número de licencia es obligatorio.'
-            : (/^[A-Za-z0-9]{6,20}$/.test(lic) ? null : 'La licencia solo admite letras y números (6 a 20 caracteres).'),
-          cVencimiento: V.fecha(this.conductor.fechaVencLicencia, 'La fecha de vencimiento'),
-          cTelefono: V.telefono(this.conductor.telefono)
-            ?? (telefonoRepetido(this.conductor.telefono, this.store.conductores(), c => c.telefono, c => c.conductorId === this.editId)
-              ? 'Ese teléfono ya está registrado para otro conductor.' : null)
-        };
-      }
       case 'lugares': {
         const l = this.lugar;
         const vacioLat = l.latitud === null || (l.latitud as unknown) === '';
@@ -114,39 +115,17 @@ export class RecursosComponent {
           lLongitud: vacioLon ? (vacioLat ? null : 'Indica también la longitud.') : (l.longitud! < -180 || l.longitud! > 180 ? 'La longitud va de -180 a 180.' : null)
         };
       }
-      case 'rutas': {
-        const r = this.ruta;
-        return {
-          rEmpresa: r.empresaId ? null : 'Selecciona la empresa.',
-          rOrigen: r.origenId ? null : 'Selecciona el origen.',
-          rDestino: !this.destinoSel ? 'Selecciona el destino (un lugar o un paquete).' : null,
-          rLugarPaquete: r.paqueteId && !r.destinoId ? 'Indica a qué lugar llega el paquete.'
-            : (r.destinoId && r.destinoId === r.origenId ? 'El destino debe ser distinto del origen.' : null),
-          rDuracion: r.duracionEstimadaMin === null || (r.duracionEstimadaMin as unknown) === '' ? null
-            : V.entero(r.duracionEstimadaMin, 'La duración', 1, 9999),
-          rFecha: this.creaSalida ? (V.fecha(r.fechaSalida ?? '', 'La fecha de la salida')
-            ?? ((r.fechaSalida ?? '') < hoy() ? 'La fecha de la salida no puede ser pasada.' : null)) : null,
-          rCupos: this.creaSalida ? V.entero(r.cuposSalida, 'Los cupos', 1, 999) : null,
-          rTarifa: r.tarifaReferencial === null || (r.tarifaReferencial as unknown) === '' ? null
-            : (r.tarifaReferencial < 0 ? 'La tarifa no puede ser negativa.' : null)
-        };
-      }
     }
   });
 
-  // ---------- Listas ----------
-  empresasActivas = computed(() => this.store.empresas().filter(e => e.estadoAfiliacion !== 'RETIRADA'));
+  personalFiltrado = computed(() => {
+    const p = this.filtroProveedor();
+    const r = this.filtroRol();
+    return this.store.personal().filter(x => (!p || x.proveedorId === p) && (!r || x.rol === r || (x.rol === 'AMBOS' && r !== 'AMBOS')));
+  });
   vehiculosFiltrados = computed(() => {
-    const e = this.filtroEmpresa();
-    return this.store.vehiculos().filter(v => !e || v.empresaId === e);
-  });
-  conductoresFiltrados = computed(() => {
-    const e = this.filtroEmpresa();
-    return this.store.conductores().filter(c => !e || c.empresaId === e);
-  });
-  rutasFiltradas = computed(() => {
-    const e = this.filtroEmpresa();
-    return this.store.rutas().filter(r => !e || r.empresaId === e);
+    const p = this.filtroProveedor();
+    return this.store.vehiculos().filter(v => !p || v.proveedorId === p);
   });
   lugaresPorCiudad = computed(() => {
     const grupos: { ciudad: string; lugares: Lugar[] }[] = [];
@@ -157,135 +136,52 @@ export class RecursosComponent {
     }
     return grupos;
   });
-
-  private paqueteNombre(salidaId: number): string {
-    return this.store.getPaquete(this.ruta.paqueteId)?.nombre ?? 'salida ' + salidaId;
-  }
-
-  nombreEmpresa(id?: number | null) { return this.store.getEmpresa(id)?.nombreComercial ?? '—'; }
-  vehiculosDe(empresaId: number) { return this.store.vehiculos().filter(v => v.empresaId === empresaId).length; }
-  rutasDe(empresaId: number) { return this.store.rutas().filter(r => r.empresaId === empresaId).length; }
+  proveedoresActivos = computed(() => this.store.proveedores().filter(p => p.estado !== 'INACTIVO'));
+  propio = computed(() => this.store.proveedores().find(p => p.esPropio));
 
   get actual() { return this.tabs.find(t => t.id === this.tab())!; }
-  cambiarTab(t: Tab) { this.tab.set(t); }
 
-  // ---------- Formularios vacíos ----------
-  private guiaVacia(): GuiaForm { return { nombreCompleto: '', especialidad: '', telefono: '' }; }
-  private empresaVacia(): EmpresaForm {
-    return { nombreComercial: '', ruc: '', contactoNombre: '', contactoTelefono: '', contactoEmail: '', direccion: '',
-      estadoAfiliacion: 'PENDIENTE', disponibilidadOperativa: 'DISPONIBLE', fechaAfiliacion: hoy() };
+  // ---------- Formularios ----------
+  private proveedorVacio(): ProveedorForm { return { nombreComercial: '', ruc: '', telefono: '', esPropio: false, estado: 'ACTIVO' }; }
+  private personaVacia(): PersonalForm {
+    return { proveedorId: this.filtroProveedor() ?? this.propio()?.proveedorId ?? null, nombreCompleto: '', rol: 'GUIA', telefono: '',
+      numLicencia: '', catLicencia: '', vencLicencia: '', estado: 'DISPONIBLE' };
   }
   private vehiculoVacio(): VehiculoForm {
-    return { empresaId: this.filtroEmpresa(), placa: '', tipoVehiculo: 'VAN', marcaModelo: '', capacidadPax: 12,
-      fechaProxMantenimiento: addDays(hoy(), 180), estadoOperativo: 'OPERATIVO' };
-  }
-  private conductorVacio(): ConductorForm {
-    return { empresaId: this.filtroEmpresa(), nombres: '', numeroLicencia: '', categoriaLicencia: 'A-IIb',
-      fechaVencLicencia: addDays(hoy(), 365), telefono: '', estadoDisponibilidad: 'DISPONIBLE' };
+    return { proveedorId: this.filtroProveedor() ?? this.propio()?.proveedorId ?? null, placa: '', tipoVehiculo: 'VAN', marcaModelo: '',
+      capacidadPax: 12, proxMantenimiento: addDays(hoy(), 180), estado: 'OPERATIVO' };
   }
   private lugarVacio(): LugarForm { return { nombre: '', tipoLugar: 'HOTEL', ciudad: '', latitud: null, longitud: null }; }
-  private rutaVacia(): RutaForm {
-    return { empresaId: this.filtroEmpresa(), origenId: null, destinoId: null, paqueteId: null, tipoServicio: 'TRASLADO',
-      duracionEstimadaMin: null, tarifaReferencial: null, estado: 'ACTIVA',
-      fechaSalida: addDays(hoy(), 14), cuposSalida: 15, guiaSalidaId: null };
-  }
-
-  // ---------- Rutas: destino (lugar o paquete), salida automática y duración real ----------
-  destinoSel = '';              // 'L:<lugarId>' o 'P:<paqueteId>'
-  estimacion = signal<EstimacionDuracion | null>(null);
-  calculando = signal(false);
-  private duracionManual = false;
-
-  paquetesDestino = computed(() => this.store.paquetes()
-    .filter(p => p.estado === 'ACTIVO' || p.paqueteId === this.ruta.paqueteId));
-  get paqueteRuta() { return this.store.getPaquete(this.ruta.paqueteId); }
-  // Con paquete, al crear la ruta se crea también su salida programada
-  get creaSalida() { return !this.editId && !!this.ruta.paqueteId; }
-
-  cambioDestino() {
-    const [tipo, id] = this.destinoSel.split(':');
-    if (tipo === 'P') {
-      this.ruta.paqueteId = Number(id);
-      this.ruta.destinoId = this.store.getPaquete(Number(id))?.lugarDestinoId ?? null;
-      if (!this.editId && this.ruta.tipoServicio === 'TRASLADO') this.ruta.tipoServicio = 'TOUR';
-    } else {
-      this.ruta.paqueteId = null;
-      this.ruta.destinoId = id ? Number(id) : null;
-    }
-    this.recalcularSiAuto();
-  }
-
-  duracionEditada() { this.duracionManual = true; this.estimacion.set(null); }
-
-  recalcularSiAuto() {
-    if (!this.duracionManual) this.calcularDuracion(false);
-  }
-
-  calcularDuracion(avisar = true) {
-    const r = this.ruta;
-    if (!r.origenId || !r.destinoId || r.origenId === r.destinoId) {
-      if (avisar) this.alerts.toast('Elige el origen y el destino primero', 'info');
-      return;
-    }
-    this.calculando.set(true);
-    this.store.estimarDuracion(r.origenId, r.destinoId, r.tipoServicio).subscribe({
-      next: e => {
-        this.calculando.set(false);
-        this.estimacion.set(e);
-        if (e.minutos) { this.ruta.duracionEstimadaMin = e.minutos; this.duracionManual = false; }
-      },
-      error: err => { this.calculando.set(false); if (avisar) this.alerts.error(this.store.error(err)); }
-    });
-  }
-
-  nuevo() {
-    this.editId = null;
-    this.guia = this.guiaVacia();
-    this.empresa = this.empresaVacia();
-    this.vehiculo = this.vehiculoVacio();
-    this.conductor = this.conductorVacio();
-    this.lugar = this.lugarVacio();
-    this.ruta = this.rutaVacia();
-    this.destinoSel = '';
-    this.duracionManual = false;
-    this.estimacion.set(null);
-    this.abrir();
-  }
 
   private abrir() { this.v.reiniciar(); this.abierto.set(true); }
 
-  editarGuia(id: number) {
-    const g = this.store.getGuia(id)!;
-    this.editId = id;
-    this.guia = { nombreCompleto: g.nombreCompleto, especialidad: g.especialidad, telefono: g.telefono };
+  nuevo() {
+    this.editId = null;
+    this.proveedor = this.proveedorVacio();
+    this.persona = this.personaVacia();
+    this.vehiculo = this.vehiculoVacio();
+    this.lugar = this.lugarVacio();
     this.abrir();
   }
-  editarEmpresa(id: number) {
-    const e = this.store.getEmpresa(id)!;
+
+  editarProveedor(id: number) {
+    const p = this.store.getProveedor(id)!;
     this.editId = id;
-    this.empresa = {
-      nombreComercial: e.nombreComercial, ruc: e.ruc, contactoNombre: e.contactoNombre, contactoTelefono: e.contactoTelefono,
-      contactoEmail: e.contactoEmail, direccion: e.direccion, estadoAfiliacion: e.estadoAfiliacion,
-      disponibilidadOperativa: e.disponibilidadOperativa, fechaAfiliacion: e.fechaAfiliacion
-    };
+    this.proveedor = { nombreComercial: p.nombreComercial, ruc: p.ruc, telefono: p.telefono, esPropio: p.esPropio, estado: p.estado };
+    this.abrir();
+  }
+  editarPersona(id: number) {
+    const p = this.store.getPersonal(id)!;
+    this.editId = id;
+    this.persona = { proveedorId: p.proveedorId, nombreCompleto: p.nombreCompleto, rol: p.rol, telefono: p.telefono,
+      numLicencia: p.numLicencia ?? '', catLicencia: p.catLicencia ?? '', vencLicencia: p.vencLicencia ?? '', estado: p.estado };
     this.abrir();
   }
   editarVehiculo(id: number) {
     const x = this.store.getVehiculo(id)!;
     this.editId = id;
-    this.vehiculo = {
-      empresaId: x.empresaId, placa: x.placa, tipoVehiculo: x.tipoVehiculo, marcaModelo: x.marcaModelo, capacidadPax: x.capacidadPax,
-      fechaProxMantenimiento: x.fechaProxMantenimiento, estadoOperativo: x.estadoOperativo
-    };
-    this.abrir();
-  }
-  editarConductor(id: number) {
-    const c = this.store.getConductor(id)!;
-    this.editId = id;
-    this.conductor = {
-      empresaId: c.empresaId, nombres: c.nombres, numeroLicencia: c.numeroLicencia, categoriaLicencia: c.categoriaLicencia,
-      fechaVencLicencia: c.fechaVencLicencia, telefono: c.telefono, estadoDisponibilidad: c.estadoDisponibilidad
-    };
+    this.vehiculo = { proveedorId: x.proveedorId, placa: x.placa, tipoVehiculo: x.tipoVehiculo, marcaModelo: x.marcaModelo,
+      capacidadPax: x.capacidadPax, proxMantenimiento: x.proxMantenimiento ?? '', estado: x.estado };
     this.abrir();
   }
   editarLugar(id: number) {
@@ -294,72 +190,46 @@ export class RecursosComponent {
     this.lugar = { nombre: l.nombre, tipoLugar: l.tipoLugar, ciudad: l.ciudad, latitud: l.latitud, longitud: l.longitud };
     this.abrir();
   }
-  editarRuta(id: number) {
-    const r = this.store.rutas().find(x => x.rutaId === id)!;
-    this.editId = id;
-    this.ruta = {
-      empresaId: r.empresaId, origenId: r.origenId, destinoId: r.destinoId, paqueteId: r.paqueteId, tipoServicio: r.tipoServicio,
-      duracionEstimadaMin: r.duracionEstimadaMin, tarifaReferencial: r.tarifaReferencial, estado: r.estado,
-      fechaSalida: null, cuposSalida: null, guiaSalidaId: null
-    };
-    this.destinoSel = r.paqueteId ? 'P:' + r.paqueteId : 'L:' + r.destinoId;
-    this.duracionManual = true;   // conserva la duración guardada; "Calcular" la recalcula
-    this.estimacion.set(null);
-    this.abrir();
-  }
 
-  // ---------- Guardar / eliminar ----------
   guardar() {
     if (this.store.ocupado()) return;
     if (!this.v.valido()) { this.alerts.toast('Revisa los campos marcados en rojo', 'error'); return; }
-    const t = (s: string) => s.trim();
+    const t = (s: string) => (s ?? '').trim();
+    const num = (x: number | null) => x === null || (x as unknown) === '' ? null : x;
     let peticion: Observable<unknown>;
     switch (this.tab()) {
-      case 'guias':
-        peticion = this.store.guardarGuia({ nombreCompleto: t(this.guia.nombreCompleto), especialidad: t(this.guia.especialidad),
-          telefono: t(this.guia.telefono) }, this.editId);
+      case 'proveedores': {
+        const p = this.proveedor;
+        peticion = this.store.guardarProveedor({ ...p, nombreComercial: t(p.nombreComercial), ruc: t(p.ruc), telefono: t(p.telefono) }, this.editId);
         break;
-      case 'empresas': {
-        const e = this.empresa;
-        peticion = this.store.guardarEmpresa({ ...e, nombreComercial: t(e.nombreComercial), ruc: t(e.ruc), contactoNombre: t(e.contactoNombre),
-          contactoTelefono: t(e.contactoTelefono), contactoEmail: t(e.contactoEmail), direccion: t(e.direccion),
-          fechaAfiliacion: e.fechaAfiliacion || null }, this.editId);
+      }
+      case 'personal': {
+        const p = this.persona;
+        const conduce = p.rol !== 'GUIA';
+        const lic = t(p.numLicencia).toUpperCase();
+        peticion = this.store.guardarPersonal({ ...p, nombreCompleto: t(p.nombreCompleto), telefono: t(p.telefono),
+          numLicencia: conduce || lic ? lic : '', catLicencia: conduce || lic ? p.catLicencia : '',
+          vencLicencia: conduce || lic ? p.vencLicencia : '' }, this.editId);
         break;
       }
       case 'vehiculos': {
         const x = this.vehiculo;
-        peticion = this.store.guardarVehiculo({ ...x, placa: t(x.placa).toUpperCase(), marcaModelo: t(x.marcaModelo) }, this.editId);
-        break;
-      }
-      case 'conductores': {
-        const c = this.conductor;
-        peticion = this.store.guardarConductor({ ...c, nombres: t(c.nombres), numeroLicencia: t(c.numeroLicencia).toUpperCase(),
-          telefono: t(c.telefono) }, this.editId);
-        break;
-      }
-      case 'lugares': {
-        const l = this.lugar;
-        const num = (x: number | null) => x === null || (x as unknown) === '' ? null : x;
-        peticion = this.store.guardarLugar({ ...l, nombre: t(l.nombre), ciudad: t(l.ciudad), latitud: num(l.latitud), longitud: num(l.longitud) }, this.editId);
+        peticion = this.store.guardarVehiculo({ ...x, placa: t(x.placa).toUpperCase(), marcaModelo: t(x.marcaModelo),
+          proxMantenimiento: x.proxMantenimiento || '' }, this.editId);
         break;
       }
       default: {
-        const r = this.ruta;
-        const num = (x: number | null) => x === null || (x as unknown) === '' ? null : x;
-        const datos: RutaForm = { ...r, tarifaReferencial: num(r.tarifaReferencial), duracionEstimadaMin: num(r.duracionEstimadaMin) };
-        if (!this.creaSalida) { datos.fechaSalida = null; datos.cuposSalida = null; datos.guiaSalidaId = null; }
-        peticion = this.store.guardarRuta(datos, this.editId);
+        const l = this.lugar;
+        peticion = this.store.guardarLugar({ ...l, nombre: t(l.nombre), ciudad: t(l.ciudad), latitud: num(l.latitud), longitud: num(l.longitud) }, this.editId);
       }
     }
     this.store.ocupado.set(true);
     peticion.subscribe({
-      next: (resultado) => {
+      next: () => {
         this.store.ocupado.set(false);
         this.recargar();
         this.abierto.set(false);
-        const salida = (resultado as { salidaCreadaId?: number | null })?.salidaCreadaId;
-        if (salida) this.alerts.success(`Ruta guardada. Se creó la salida programada de ${this.paqueteNombre(salida)}.`, 'Salida creada');
-        else this.alerts.toast('Guardado');
+        this.alerts.toast('Guardado');
       },
       error: (err) => {
         this.store.ocupado.set(false);
@@ -368,28 +238,22 @@ export class RecursosComponent {
     });
   }
 
-  // Vehículos y conductores cambian la capacidad de la empresa (VW_EMPRESA_CAPACIDAD)
+  // La flota y el personal cambian los totales de cada proveedor
   private recargar() {
-    switch (this.tab()) {
-      case 'guias': this.store.cargarGuias(); break;
-      case 'lugares': this.store.cargarLugares(); break;
-      case 'rutas': this.store.cargarRutas(); this.store.cargarSalidas(); this.store.cargarPaquetes(); break;
-      case 'vehiculos': this.store.cargarVehiculos(); this.store.cargarEmpresas(); break;
-      case 'conductores': this.store.cargarConductores(); this.store.cargarEmpresas(); break;
-      default: this.store.cargarEmpresas();
-    }
+    if (this.tab() === 'lugares') { this.store.cargarLugares(); return; }
+    if (this.tab() === 'personal') this.store.cargarPersonal();
+    if (this.tab() === 'vehiculos') this.store.cargarVehiculos();
+    this.store.cargarProveedores();
   }
 
   async eliminar(id: number) {
     const tab = this.tab();
     if (!(await this.alerts.confirm('Esta acción no se puede deshacer.', 'Eliminar ' + this.actual.singular))) return;
     const peticiones: { [t in Tab]: () => Observable<void> } = {
-      guias: () => this.store.eliminarGuia(id),
-      empresas: () => this.store.eliminarEmpresa(id),
+      proveedores: () => this.store.eliminarProveedor(id),
+      personal: () => this.store.eliminarPersonal(id),
       vehiculos: () => this.store.eliminarVehiculo(id),
-      conductores: () => this.store.eliminarConductor(id),
-      lugares: () => this.store.eliminarLugar(id),
-      rutas: () => this.store.eliminarRuta(id)
+      lugares: () => this.store.eliminarLugar(id)
     };
     peticiones[tab]().subscribe({
       next: () => { this.recargar(); this.alerts.toast('Eliminado'); },

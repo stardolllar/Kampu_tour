@@ -4,10 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDate;
 import org.hibernate.annotations.DynamicUpdate;
 
-// trg_salida_biu calcula fecha_fin (si va nula) y cupos_disponibles;
-// trg_detalle_reserva_biud y trg_reserva_estado_bu mantienen los cupos.
-// @DynamicUpdate: el UPDATE solo lleva las columnas cambiadas (así los triggers
-// "UPDATE OF ..." solo se disparan cuando corresponde).
+// fecha_fin = inicio + días del paquete - 1 y cupos_disponibles: los calcula el backend
 @Entity
 @DynamicUpdate
 @Table(name = "SALIDAS_PROGRAMADAS")
@@ -20,21 +17,21 @@ public class SalidaProgramada {
     @Column(name = "paquete_id", nullable = false)
     private Long paqueteId;
 
+    // PERSONAL con rol GUIA o AMBOS
+    @Column(name = "guia_id")
+    private Long guiaId;
+
     @Column(name = "fecha_inicio", nullable = false)
     private LocalDate fechaInicio;
 
-    @Column(name = "fecha_fin")
+    @Column(name = "fecha_fin", nullable = false)
     private LocalDate fechaFin;
 
     @Column(name = "cupos_maximos", nullable = false)
     private Integer cuposMaximos;
 
-    // Lo mantienen los triggers: Hibernate nunca lo escribe
-    @Column(name = "cupos_disponibles", insertable = false, updatable = false)
+    @Column(name = "cupos_disponibles", nullable = false)
     private Integer cuposDisponibles;
-
-    @Column(name = "guia_id")
-    private Long guiaId;
 
     @Column(name = "estado", length = 20)
     private String estado;
@@ -56,6 +53,14 @@ public class SalidaProgramada {
 
     public void setPaqueteId(Long paqueteId) {
         this.paqueteId = paqueteId;
+    }
+
+    public Long getGuiaId() {
+        return guiaId;
+    }
+
+    public void setGuiaId(Long guiaId) {
+        this.guiaId = guiaId;
     }
 
     public LocalDate getFechaInicio() {
@@ -88,14 +93,6 @@ public class SalidaProgramada {
 
     public void setCuposDisponibles(Integer cuposDisponibles) {
         this.cuposDisponibles = cuposDisponibles;
-    }
-
-    public Long getGuiaId() {
-        return guiaId;
-    }
-
-    public void setGuiaId(Long guiaId) {
-        this.guiaId = guiaId;
     }
 
     public String getEstado() {

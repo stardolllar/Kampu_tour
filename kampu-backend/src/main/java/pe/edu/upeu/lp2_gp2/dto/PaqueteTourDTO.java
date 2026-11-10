@@ -12,11 +12,10 @@ public record PaqueteTourDTO(
         Integer dias,
         Integer noches,
         String imagen,
-        String estado,
-        Long lugarDestinoId
+        String estado
 ) {
     public static PaqueteTourDTO desde(PaqueteTour p) {
         return new PaqueteTourDTO(p.getPaqueteId(), p.getNombre(), p.getDescripcion() == null ? "" : p.getDescripcion(), p.getPrecioBase(),
-                p.getDias(), p.getNoches(), p.getImagen() == null ? "" : p.getImagen(), p.getEstado(), p.getLugarDestinoId());
+                p.getDias(), p.getNoches(), p.getImagen() == null ? "" : p.getImagen(), p.getEstado());
     }
 }

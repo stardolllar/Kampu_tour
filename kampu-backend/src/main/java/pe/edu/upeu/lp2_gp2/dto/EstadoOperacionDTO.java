@@ -2,7 +2,7 @@ package pe.edu.upeu.lp2_gp2.dto;
 
 import java.util.List;
 
-// DOMINIO_ESTADOS + transiciones permitidas (DOMINIO_TRANSICIONES)
+// Estado de una operación de transporte y sus transiciones permitidas (EstadoOperacion.java)
 public record EstadoOperacionDTO(
         String codigo,
         String nombre,

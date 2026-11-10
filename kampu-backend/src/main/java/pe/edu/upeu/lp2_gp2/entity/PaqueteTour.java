@@ -1,10 +1,11 @@
 package pe.edu.upeu.lp2_gp2.entity;
 
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
+@DynamicUpdate
 @Table(name = "PAQUETES_TOUR")
 public class PaqueteTour {
     @Id
@@ -32,10 +33,6 @@ public class PaqueteTour {
 
     @Column(name = "estado", length = 20)
     private String estado;
-
-    // Lugar al que llega el paquete (02_extension_kampu.sql)
-    @Column(name = "lugar_destino_id")
-    private Long lugarDestinoId;
 
     public PaqueteTour() {
     }
@@ -102,13 +99,5 @@ public class PaqueteTour {
 
     public void setEstado(String estado) {
         this.estado = estado;
-    }
-
-    public Long getLugarDestinoId() {
-        return lugarDestinoId;
-    }
-
-    public void setLugarDestinoId(Long lugarDestinoId) {
-        this.lugarDestinoId = lugarDestinoId;
     }
 }

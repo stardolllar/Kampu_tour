@@ -5,8 +5,8 @@ import jakarta.validation.constraints.*;
 import java.time.LocalDate;
 
 public record VehiculoRequestDTO(
-        @NotNull(message = "Selecciona la empresa a la que pertenece el vehículo.")
-        Long empresaId,
+        @NotNull(message = "Selecciona el proveedor (Kampu Tours si es flota propia).")
+        Long proveedorId,
         @NotBlank(message = "La placa es obligatoria.")
         @Pattern(regexp = Reglas.PLACA, message = "La placa solo admite letras, números y guion (3 a 10 caracteres).")
         String placa,
@@ -20,10 +20,9 @@ public record VehiculoRequestDTO(
         @Min(value = 1, message = "La capacidad debe estar entre 1 y 999.")
         @Max(value = 999, message = "La capacidad debe estar entre 1 y 999.")
         Integer capacidadPax,
-        @NotNull(message = "La fecha del próximo mantenimiento es obligatoria.")
-        LocalDate fechaProxMantenimiento,
-        @NotNull(message = "El estado operativo es obligatorio.")
-        @Pattern(regexp = "OPERATIVO|EN_MANTENIMIENTO|FUERA_DE_SERVICIO", message = "Estado operativo no válido.")
-        String estadoOperativo
+        LocalDate proxMantenimiento,
+        @NotNull(message = "El estado es obligatorio.")
+        @Pattern(regexp = "OPERATIVO|MANTENIMIENTO|INACTIVO", message = "El estado debe ser OPERATIVO, MANTENIMIENTO o INACTIVO.")
+        String estado
 ) {
 }

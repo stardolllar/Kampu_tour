@@ -4,9 +4,6 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import org.hibernate.annotations.DynamicUpdate;
 
-// Una línea por salida reservada. Al insertar/cambiar/borrar, trg_detalle_reserva_biud
-// valida la salida, descuenta o devuelve cupos, copia el precio base si va nulo y
-// actualiza RESERVAS.monto_total. subtotal es una columna virtual.
 @Entity
 @DynamicUpdate
 @Table(name = "DETALLE_RESERVA")
@@ -25,12 +22,13 @@ public class DetalleReserva {
     @Column(name = "cantidad", nullable = false)
     private Integer cantidad;
 
-    @Column(name = "precio_unitario", precision = 10, scale = 2)
+    @Column(name = "precio_unitario", nullable = false, precision = 10, scale = 2)
     private BigDecimal precioUnitario;
 
-    @Column(name = "descuento", precision = 10, scale = 2)
+    @Column(name = "descuento", nullable = false, precision = 10, scale = 2)
     private BigDecimal descuento;
 
+    // Columna virtual
     @Column(name = "subtotal", insertable = false, updatable = false)
     private BigDecimal subtotal;
 

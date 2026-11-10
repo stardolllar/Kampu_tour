@@ -55,6 +55,7 @@ public class ClienteServiceImpl implements IClienteService {
     public ClienteDTO crear(ClienteRequestDTO dto) {
         Cliente c = new Cliente();
         copiar(dto, c, null);
+        c.setEstadoCuenta("ACTIVO");
         return ClienteDTO.desde(clienteRepository.save(c));
     }
 
@@ -100,6 +101,11 @@ public class ClienteServiceImpl implements IClienteService {
         // uq_cli_telefono: el teléfono no se repite
         if (clienteRepository.contarTelefono(Reglas.digitos(dto.telefono()), Reglas.idOMenosUno(id)) > 0) {
             throw new DuplicateResourceException("El teléfono " + dto.telefono().trim() + " ya está registrado para otro cliente.");
+        }
+        // uq_cli_email: el correo identifica la cuenta del portal
+        Optional<Cliente> mismoCorreo = clienteRepository.findFirstByEmailIgnoreCase(dto.email().trim());
+        if (mismoCorreo.isPresent() && !mismoCorreo.get().getClienteId().equals(id)) {
+            throw new DuplicateResourceException("El correo " + dto.email().trim() + " ya está registrado para otro cliente.");
         }
         c.setNombreCompleto(dto.nombreCompleto().trim());
         c.setTipoDocumento(dto.tipoDocumento());

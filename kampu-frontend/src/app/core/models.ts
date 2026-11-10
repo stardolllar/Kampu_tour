@@ -6,21 +6,21 @@ export type TipoDocumento = 'DNI' | 'CE' | 'PASAPORTE';
 // Los clientes también pueden ser empresas (RUC); los pasajeros no
 export type TipoDocumentoCliente = TipoDocumento | 'RUC';
 export type Moneda = 'PEN' | 'USD' | 'EUR';
-// chk_usu_rol de la v3
-export type Rol = 'ADMIN' | 'VENDEDOR' | 'OPERADOR';
+// chk_usu_rol (personal interno) + CLIENTE (portal web)
+export type Rol = 'ADMIN' | 'VENDEDOR' | 'OPERADOR' | 'CLIENTE';
 export type EstadoRegistro = 'ACTIVO' | 'INACTIVO';
-export type CategoriaLicencia = 'A-IIa' | 'A-IIb' | 'A-IIIa' | 'A-IIIb' | 'A-IIIc';
-export type EstadoAfiliacion = 'PENDIENTE' | 'ACTIVA' | 'SUSPENDIDA' | 'RETIRADA';
-export type DisponibilidadOperativa = 'DISPONIBLE' | 'LIMITADA' | 'NO_DISPONIBLE';
+export type CategoriaLicencia = 'A-I' | 'A-IIa' | 'A-IIb' | 'A-IIIa' | 'A-IIIb' | 'A-IIIc';
+export type EstadoProveedor = 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
 export type TipoLugar = 'AEROPUERTO' | 'TERMINAL' | 'HOTEL' | 'ATRACTIVO' | 'CIUDAD' | 'OTRO';
-export type TipoServicio = 'TRASLADO' | 'TOUR' | 'INTERPROVINCIAL';
-export type EstadoRuta = 'ACTIVA' | 'INACTIVA';
 export type TipoVehiculo = 'AUTO' | 'CAMIONETA_4X4' | 'VAN' | 'MINIBUS' | 'BUS';
-export type EstadoOperativo = 'OPERATIVO' | 'EN_MANTENIMIENTO' | 'FUERA_DE_SERVICIO';
-export type EstadoConductor = 'DISPONIBLE' | 'DESCANSO' | 'VACACIONES' | 'INACTIVO';
-// DOMINIO_ESTADOS de la v3
-export type EstadoOperacion = 'PROGRAMADO' | 'ASIGNADO' | 'EMBARQUE' | 'EN_ESPERA_SALIDA' | 'EN_RUTA'
-  | 'LLEGADA_PROXIMA' | 'FINALIZADO' | 'RETRASADO' | 'CANCELADO';
+export type EstadoVehiculo = 'OPERATIVO' | 'MANTENIMIENTO' | 'INACTIVO';
+export type RolPersonal = 'GUIA' | 'CONDUCTOR' | 'AMBOS';
+export type EstadoPersonal = 'DISPONIBLE' | 'OCUPADO' | 'INACTIVO';
+// Estados de tráfico v4 (EstadoOperacion.java)
+export type EstadoOperacion = 'PROGRAMADO' | 'ASIGNADO' | 'EMBARQUE' | 'EN_RUTA' | 'FINALIZADO' | 'CANCELADO';
+// Portal del cliente (VW_PAQUETES_CLIENTE)
+export type EstadoEjecucion = 'POR_EMPEZAR' | 'EN_CURSO' | 'TERMINADO' | 'CANCELADO';
+export type EstadoPagoPaquete = 'PAGADO_COMPLETO' | 'FALTA_PAGAR' | 'PENDIENTE_PAGO' | 'ANULADO';
 
 export interface UsuarioSistema {
   usuarioId: number;
@@ -43,29 +43,32 @@ export interface PaqueteTour {
   lugarDestinoId: number | null;
 }
 
-export interface Guia {
-  guiaId: number;
-  nombreCompleto: string;
-  especialidad: string;
-  telefono: string;
-}
 
-// ---------- Proveedores de transporte (v3) ----------
-export interface EmpresaTransporte {
-  empresaId: number;
+// ---------- Proveedores (v4): Kampu Tours (propio) y terceros ----------
+export interface Proveedor {
+  proveedorId: number;
   nombreComercial: string;
   ruc: string;
-  contactoNombre: string;
-  contactoTelefono: string;
-  contactoEmail: string;
-  direccion: string;
-  estadoAfiliacion: EstadoAfiliacion;
-  disponibilidadOperativa: DisponibilidadOperativa;
-  fechaAfiliacion: string | null;
-  // Vista VW_EMPRESA_CAPACIDAD
-  totalVehiculos: number;
-  capacidadTotalTransporte: number;
-  conductoresDisponibles: number;
+  telefono: string;
+  esPropio: boolean;
+  estado: EstadoProveedor;
+  vehiculos: number;
+  capacidadOperativa: number;
+  conductores: number;
+  guias: number;
+}
+
+// Guías y conductores (un registro puede ser AMBOS)
+export interface Personal {
+  personalId: number;
+  proveedorId: number;
+  nombreCompleto: string;
+  rol: RolPersonal;
+  telefono: string;
+  numLicencia: string | null;
+  catLicencia: CategoriaLicencia | null;
+  vencLicencia: string | null;
+  estado: EstadoPersonal;
 }
 
 export interface Lugar {
@@ -78,22 +81,18 @@ export interface Lugar {
   longitud: number | null;
 }
 
-export interface RutaProveedor {
-  rutaId: number;
-  empresaId: number;
-  origenId: number;
-  destinoId: number;
-  // Ruta hacia un paquete (su destino es el lugar del paquete)
-  paqueteId: number | null;
-  tipoServicio: TipoServicio;
-  duracionEstimadaMin: number;
-  tarifaReferencial: number | null;
-  estado: EstadoRuta;
-  // Salida creada automáticamente al registrar una ruta hacia un paquete
-  salidaCreadaId: number | null;
+export interface Vehiculo {
+  vehiculoId: number;
+  proveedorId: number;
+  placa: string;
+  tipoVehiculo: TipoVehiculo;
+  marcaModelo: string;
+  capacidadPax: number;
+  proxMantenimiento: string | null;
+  estado: EstadoVehiculo;
 }
 
-// Duración calculada con datos reales: OSRM (OpenStreetMap) o ESTIMADO (PKG_RUTAS con coordenadas)
+// Duración calculada con datos reales: OSRM (OpenStreetMap) o ESTIMADO (coordenadas)
 export interface EstimacionDuracion {
   minutos: number | null;
   distanciaKm: number | null;
@@ -101,36 +100,13 @@ export interface EstimacionDuracion {
   detalle: string;
 }
 
-export interface Vehiculo {
-  vehiculoId: number;
-  empresaId: number;
-  placa: string;
-  tipoVehiculo: TipoVehiculo;
-  marcaModelo: string;
-  capacidadPax: number;
-  fechaProxMantenimiento: string;
-  estadoOperativo: EstadoOperativo;
-}
-
-export interface Conductor {
-  conductorId: number;
-  empresaId: number;
-  nombres: string;
-  numeroLicencia: string;
-  categoriaLicencia: CategoriaLicencia;
-  fechaVencLicencia: string;
-  telefono: string;
-  estadoDisponibilidad: EstadoConductor;
-}
-
-// ---------- Tráfico (OPERACION_TRANSPORTE + VW_TABLERO_OPERACIONES) ----------
+// ---------- Tráfico (OPERACIONES_TRANSPORTE) ----------
 export interface Operacion {
   operacionId: number;
   codigoOperacion: string;
   salidaId: number | null;
   origenId: number;
   destinoId: number;
-  empresaId: number | null;
   vehiculoId: number | null;
   conductorId: number | null;
   paxProgramados: number;
@@ -138,10 +114,11 @@ export interface Operacion {
   horaEstimadaLlegada: string;
   estadoActual: EstadoOperacion;
   observaciones: string;
-  // Desde la vista VW_TABLERO_OPERACIONES
   origen: string;
   destino: string;
-  empresa: string | null;
+  proveedorId: number | null;
+  proveedor: string | null;
+  proveedorPropio: boolean;
   placa: string | null;
   conductor: string | null;
   estadoNombre: string;
@@ -176,8 +153,9 @@ export interface HistorialOperacion {
 export interface RecursoCandidato {
   tipoRecurso: 'VEHICULO' | 'CONDUCTOR';
   recursoId: number;
-  empresaId: number;
-  empresa: string;
+  proveedorId: number;
+  proveedor: string;
+  proveedorPropio: boolean;
   descripcion: string;
   capacidadPax: number | null;
   horasDia: number | null;
@@ -191,6 +169,9 @@ export interface Cliente {
   numeroDocumento: string;
   email: string;
   telefono: string;
+  cuentaWeb: boolean;       // ya se registró en el portal
+  estadoCuenta: string;
+  fechaRegistro: string | null;
 }
 
 export interface SalidaProgramada {
@@ -225,15 +206,14 @@ export interface Reserva {
   observaciones: string;
   formaReembolso?: string;
   usuarioAnulaId?: number;
-  contactoNombre?: string | null;
-  contactoEmail?: string | null;
-  contactoTelefono?: string | null;
   boletaEnviadaEn?: string | null;
 }
 
-// Datos mínimos de un cliente no registrado (invitado)
+// Cliente nuevo que se registra al reservar (v4: toda reserva tiene cliente)
 export interface ContactoReserva {
   nombre: string;
+  tipoDocumento: TipoDocumento;
+  numeroDocumento: string;
   email: string;
   telefono: string;
 }
@@ -260,6 +240,66 @@ export interface Pago {
   codigoTransaccion: string;
   fechaPago: string;
   estadoTransaccion: EstadoTransaccion;
+  registradoPor: 'ADMIN' | 'VENDEDOR' | 'CLIENTE';
+}
+
+// ---------- Portal del cliente ----------
+export interface PortalPaquete {
+  reservaId: number;
+  salidaId: number;
+  paqueteId: number;
+  paqueteNombre: string;
+  imagen: string;
+  dias: number;
+  noches: number;
+  fechaInicio: string;
+  fechaFin: string;
+  pasajeros: number;
+  fechaReserva: string;
+  estadoReserva: EstadoReserva;
+  estadoEjecucion: EstadoEjecucion;
+  estadoPago: EstadoPagoPaquete;
+  montoTotal: number;
+  montoPagado: number;
+  saldo: number;
+  montoPorValidar: number;
+}
+
+export interface PortalDetalle {
+  paquete: PortalPaquete;
+  descripcion: string;
+  guia: string | null;
+  pasajeros: { nombreCompleto: string; tipoDocumento: string; numeroDocumento: string; nacionalidad: string }[];
+  pagos: Pago[];
+}
+
+// VW_RESUMEN_PAQUETES_POR_ROL (montos nulos para el Operador)
+export interface ResumenPaquete {
+  salidaId: number;
+  paqueteId: number;
+  paqueteNombre: string;
+  fechaInicio: string;
+  fechaFin: string;
+  estadoSalida: EstadoSalida;
+  estadoEjecucion: EstadoEjecucion;
+  cuposMaximos: number;
+  cuposDisponibles: number;
+  pasajeros: number;
+  reservasActivas: number;
+  operaciones: number;
+  guia: string | null;
+  montoVendido: number | null;
+  montoCobrado: number | null;
+}
+
+export interface RegistroForm {
+  nombreCompleto: string;
+  tipoDocumento: TipoDocumento;
+  numeroDocumento: string;
+  email: string;
+  telefono: string;
+  password: string;
+  confirmacion: string;
 }
 
 export interface PaqueteForm {
@@ -273,22 +313,24 @@ export interface PaqueteForm {
   lugarDestinoId: number | null;
 }
 
-export interface GuiaForm {
-  nombreCompleto: string;
-  especialidad: string;
-  telefono: string;
-}
 
-export interface EmpresaForm {
+export interface ProveedorForm {
   nombreComercial: string;
   ruc: string;
-  contactoNombre: string;
-  contactoTelefono: string;
-  contactoEmail: string;
-  direccion: string;
-  estadoAfiliacion: EstadoAfiliacion;
-  disponibilidadOperativa: DisponibilidadOperativa;
-  fechaAfiliacion: string | null;
+  telefono: string;
+  esPropio: boolean;
+  estado: EstadoProveedor;
+}
+
+export interface PersonalForm {
+  proveedorId: number | null;
+  nombreCompleto: string;
+  rol: RolPersonal;
+  telefono: string;
+  numLicencia: string;
+  catLicencia: CategoriaLicencia | '';
+  vencLicencia: string;
+  estado: EstadoPersonal;
 }
 
 export interface LugarForm {
@@ -299,46 +341,20 @@ export interface LugarForm {
   longitud: number | null;
 }
 
-export interface RutaForm {
-  empresaId: number | null;
-  origenId: number | null;
-  // Destino: un lugar, o un paquete (se crea su salida programada)
-  destinoId: number | null;
-  paqueteId: number | null;
-  tipoServicio: TipoServicio;
-  duracionEstimadaMin: number | null;   // vacía: se calcula con datos reales
-  tarifaReferencial: number | null;
-  estado: EstadoRuta;
-  fechaSalida: string | null;
-  cuposSalida: number | null;
-  guiaSalidaId: number | null;
-}
-
 export interface VehiculoForm {
-  empresaId: number | null;
+  proveedorId: number | null;
   placa: string;
   tipoVehiculo: TipoVehiculo;
   marcaModelo: string;
   capacidadPax: number | null;
-  fechaProxMantenimiento: string;
-  estadoOperativo: EstadoOperativo;
-}
-
-export interface ConductorForm {
-  empresaId: number | null;
-  nombres: string;
-  numeroLicencia: string;
-  categoriaLicencia: CategoriaLicencia;
-  fechaVencLicencia: string;
-  telefono: string;
-  estadoDisponibilidad: EstadoConductor;
+  proxMantenimiento: string;
+  estado: EstadoVehiculo;
 }
 
 export interface OperacionForm {
   salidaId: number | null;
   origenId: number | null;
   destinoId: number | null;
-  empresaId: number | null;
   vehiculoId: number | null;
   conductorId: number | null;
   paxProgramados: number | null;
@@ -372,9 +388,13 @@ export interface PasajeroDraft {
   fechaNacimiento: string;
 }
 
+// Personal interno (usuarioId) o cliente del portal (clienteId). token: "Authorization: Bearer"
 export interface Sesion {
-  usuarioId: number;
+  usuarioId: number | null;
+  clienteId: number | null;
   username: string;
+  nombre: string;
   rol: Rol;
-  estado: EstadoRegistro;
+  estado: string;
+  token: string;
 }

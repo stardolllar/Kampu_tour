@@ -30,7 +30,7 @@
 
     <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
       <div class="px-[18px] pb-2 eyebrow !text-[10px] whitespace-nowrap transition-opacity duration-200 lg:opacity-0 lg:group-hover/side:opacity-100 lg:group-focus-within/side:opacity-100">Menú</div>
-      @for (item of menu; track item.ruta) {
+      @for (item of menu(); track item.ruta) {
         <a [routerLink]="item.ruta" (click)="abierto.set(false)" [attr.aria-label]="item.texto"
            routerLinkActive="nav-active" [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
            class="nav-item group/item relative flex h-11 items-center gap-3.5 rounded-xl px-[18px] text-sm font-medium text-zinc-500 outline-none
@@ -54,7 +54,7 @@
         <div class="avatar w-10 h-10 text-sm bg-gradient-to-br from-brand-100 to-brand-200 text-brand-800 ring-2 ring-white shadow-soft">{{ iniciales() }}</div>
         <div class="min-w-0 flex-1 whitespace-nowrap transition-opacity duration-200 lg:opacity-0 lg:group-hover/side:opacity-100 lg:group-focus-within/side:opacity-100">
           <div class="text-sm font-semibold text-zinc-900 truncate">{{ auth.usuario()?.username }}</div>
-          <div class="eyebrow !text-[10px]">{{ auth.usuario()?.rol }}</div>
+          <div class="eyebrow !text-[10px]">{{ rolTexto() }}</div>
         </div>
         <button type="button" class="icon-btn-danger shrink-0 transition-opacity duration-200 lg:opacity-0 lg:group-hover/side:opacity-100 lg:focus-visible:opacity-100" title="Cerrar sesión" aria-label="Cerrar sesión" (click)="salir()">
           <app-icon name="logout" size="w-[18px] h-[18px]" />

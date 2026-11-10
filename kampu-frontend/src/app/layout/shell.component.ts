@@ -5,6 +5,7 @@ import { TourStore } from '../core/services/tour-store.service';
 import { AlertService } from '../core/services/alert.service';
 import { IconComponent } from '../shared/icon.component';
 import { LogoComponent } from '../shared/logo.component';
+import { etiqueta } from '../core/utils/etiquetas';
 
 @Component({
   selector: 'app-shell',
@@ -21,16 +22,19 @@ export class ShellComponent {
 
   abierto = signal(false);
 
-  menu = [
+  // Menú según el rol (mismas reglas que app.routes.ts y PKG_SEGURIDAD_ROLES)
+  private todo: { ruta: string; texto: string; icono: string; roles?: string[]; exact?: boolean }[] = [
     { ruta: '/dashboard', texto: 'Panel', icono: 'home' },
-    { ruta: '/reservas', texto: 'Reservas', icono: 'ticket' },
+    { ruta: '/reservas', texto: 'Reservas', icono: 'ticket', roles: ['ADMIN', 'VENDEDOR'] },
     { ruta: '/salidas', texto: 'Salidas', icono: 'calendar' },
-    { ruta: '/paquetes', texto: 'Paquetes', icono: 'package' },
-    { ruta: '/pagos', texto: 'Pagos', icono: 'card' },
-    { ruta: '/clientes', texto: 'Clientes', icono: 'users' },
+    { ruta: '/paquetes', texto: 'Paquetes', icono: 'package', roles: ['ADMIN', 'VENDEDOR'] },
+    { ruta: '/pagos', texto: 'Pagos', icono: 'card', roles: ['ADMIN', 'VENDEDOR'] },
+    { ruta: '/clientes', texto: 'Clientes', icono: 'users', roles: ['ADMIN', 'VENDEDOR'] },
     { ruta: '/operaciones', texto: 'Tráfico', icono: 'truck' },
     { ruta: '/recursos', texto: 'Logística', icono: 'map-pin' }
-  ] as { ruta: string; texto: string; icono: string; exact?: boolean }[];
+  ];
+  menu = computed(() => this.todo.filter(m => !m.roles || m.roles.includes(this.auth.rol() ?? '')));
+  rolTexto = computed(() => etiqueta(this.auth.rol()));
 
   pendientes = computed(() => this.store.reservas().filter(r => r.estadoReserva === 'PENDIENTE').length);
   iniciales = computed(() => (this.auth.usuario()?.username ?? '?').slice(0, 2).toUpperCase());

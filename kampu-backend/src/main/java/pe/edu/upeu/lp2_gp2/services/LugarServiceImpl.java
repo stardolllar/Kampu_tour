@@ -10,7 +10,6 @@ import pe.edu.upeu.lp2_gp2.exception.DuplicateResourceException;
 import pe.edu.upeu.lp2_gp2.exception.ResourceNotFoundException;
 import pe.edu.upeu.lp2_gp2.repository.LugarRepository;
 import pe.edu.upeu.lp2_gp2.repository.OperacionTransporteRepository;
-import pe.edu.upeu.lp2_gp2.repository.RutaProveedorRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,13 +17,11 @@ import java.util.Optional;
 @Service
 public class LugarServiceImpl implements ILugarService {
     private final LugarRepository lugarRepository;
-    private final RutaProveedorRepository rutaRepository;
     private final OperacionTransporteRepository operacionRepository;
 
-    public LugarServiceImpl(LugarRepository lugarRepository, RutaProveedorRepository rutaRepository,
+    public LugarServiceImpl(LugarRepository lugarRepository,
                             OperacionTransporteRepository operacionRepository) {
         this.lugarRepository = lugarRepository;
-        this.rutaRepository = rutaRepository;
         this.operacionRepository = operacionRepository;
     }
 
@@ -60,8 +57,8 @@ public class LugarServiceImpl implements ILugarService {
     @Transactional
     public void eliminar(Long id) {
         Lugar l = obtener(id);
-        if (rutaRepository.existsByOrigenIdOrDestinoId(id, id) || operacionRepository.existsByOrigenIdOrDestinoId(id, id)) {
-            throw new BusinessException("El lugar se usa en rutas u operaciones de transporte.");
+        if (operacionRepository.existsByOrigenIdOrDestinoId(id, id)) {
+            throw new BusinessException("El lugar se usa en operaciones de transporte.");
         }
         lugarRepository.delete(l);
     }

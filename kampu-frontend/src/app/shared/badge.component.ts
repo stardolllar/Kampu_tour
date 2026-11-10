@@ -45,9 +45,22 @@ export class BadgeComponent {
     LLEGADA_PROXIMA: 'bg-leaf-50 text-leaf-700 ring-leaf-200/70',
     FINALIZADO: 'bg-emerald-50 text-emerald-700 ring-emerald-200/70',
     RETRASADO: 'bg-amber-50 text-amber-700 ring-amber-200/70',
-    CANCELADO: 'bg-rose-50 text-rose-700 ring-rose-200/70'
+    CANCELADO: 'bg-rose-50 text-rose-700 ring-rose-200/70',
+    // Portal del cliente (v4): estado de ejecución y estado de pago
+    POR_EMPEZAR: 'bg-sky-50 text-sky-700 ring-sky-200/70',
+    EN_CURSO: 'bg-brand-50 text-brand-700 ring-brand-200/70',
+    TERMINADO: 'bg-zinc-100 text-zinc-700 ring-zinc-200',
+    PAGADO_COMPLETO: 'bg-emerald-50 text-emerald-700 ring-emerald-200/70',
+    FALTA_PAGAR: 'bg-amber-50 text-amber-700 ring-amber-200/70',
+    PENDIENTE_PAGO: 'bg-rose-50 text-rose-700 ring-rose-200/70'
+  };
+
+  // Textos legibles de los estados del portal
+  private textos: { [estado: string]: string } = {
+    POR_EMPEZAR: 'Por empezar', EN_CURSO: 'En curso', TERMINADO: 'Terminado',
+    PAGADO_COMPLETO: 'Pagado completo', FALTA_PAGAR: 'Falta pagar', PENDIENTE_PAGO: 'Pendiente de pago'
   };
 
   get clase() { return this.mapa[this.estado] ?? 'bg-zinc-100 text-zinc-700 ring-zinc-200'; }
-  get texto() { return this.estado.replace(/_/g, ' '); }
+  get texto() { return this.textos[this.estado] ?? this.estado.replace(/_/g, ' '); }
 }

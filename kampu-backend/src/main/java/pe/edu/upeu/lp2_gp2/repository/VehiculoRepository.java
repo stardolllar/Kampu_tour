@@ -13,5 +13,5 @@ public interface VehiculoRepository extends JpaRepository<Vehiculo, Long> {
 
     Optional<Vehiculo> findByPlacaIgnoreCase(String placa);
 
-    boolean existsByEmpresaId(Long empresaId);
+    boolean existsByProveedorId(Long proveedorId);
 }

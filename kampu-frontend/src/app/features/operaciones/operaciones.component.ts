@@ -3,7 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
-import { EstadoOperacion, HistorialOperacion, Operacion, OperacionForm, RecursoCandidato } from '../../core/models';
+import { EstadoOperacion, EstimacionDuracion, HistorialOperacion, Operacion, OperacionForm, RecursoCandidato } from '../../core/models';
 import { TourStore } from '../../core/services/tour-store.service';
 import { AlertService } from '../../core/services/alert.service';
 import { BadgeComponent } from '../../shared/badge.component';
@@ -17,12 +17,12 @@ import { hoy } from '../../core/utils/date.util';
 type Grupo = '' | 'PENDIENTES' | 'EN_CURSO' | 'CERRADAS';
 type Ventana = 'form' | 'asignar' | 'estado' | 'historial' | null;
 
-const EN_CURSO: EstadoOperacion[] = ['ASIGNADO', 'EMBARQUE', 'EN_ESPERA_SALIDA', 'EN_RUTA', 'LLEGADA_PROXIMA', 'RETRASADO'];
+const EN_CURSO: EstadoOperacion[] = ['ASIGNADO', 'EMBARQUE', 'EN_RUTA'];
 
 /**
- * Tráfico de transporte (OPERACION_TRANSPORTE). Las reglas las aplica la base de datos:
- * trg_operacion_transporte (transiciones, cruces, horas del conductor, mantenimiento,
- * capacidad de la salida, historial) y PKG_ASIGNACION (asignación automática).
+ * Tráfico de transporte (OPERACIONES_TRANSPORTE). En v4 las reglas las aplica el backend:
+ * transiciones de estado, cruces de horario, horas del conductor, mantenimiento, capacidad
+ * de la salida, asignación automática (flota propia primero) e historial.
  */
 @Component({
   selector: 'app-operaciones',
@@ -99,7 +99,9 @@ export class OperacionesComponent {
     return {
       porAsignar: ops.filter(o => o.estadoActual === 'PROGRAMADO').length,
       enCurso: ops.filter(o => EN_CURSO.includes(o.estadoActual)).length,
-      retrasadas: ops.filter(o => o.estadoActual === 'RETRASADO').length,
+      // Salió más de 15 min tarde, o ya debió salir y sigue sin partir
+      retrasadas: ops.filter(o => (o.minRetrasoSalida ?? 0) > 15
+        || (['PROGRAMADO', 'ASIGNADO', 'EMBARQUE'].includes(o.estadoActual) && new Date(o.horaProgramadaSalida) < new Date())).length,
       hoy: ops.filter(o => o.horaProgramadaSalida.startsWith(hoy())).length
     };
   });
@@ -119,34 +121,39 @@ export class OperacionesComponent {
 
   // ---------- Crear / editar ----------
   private vacio(): OperacionForm {
-    return { salidaId: this.filtroSalida(), origenId: null, destinoId: null, empresaId: null, vehiculoId: null, conductorId: null,
+    return { salidaId: this.filtroSalida(), origenId: null, destinoId: null, vehiculoId: null, conductorId: null,
       paxProgramados: null, horaProgramadaSalida: '', horaEstimadaLlegada: null, observaciones: '' };
   }
 
-  // Empresas con la ruta origen -> destino activa
-  get empresasConRuta() {
-    const f = this.form;
-    if (!f.origenId || !f.destinoId) return [];
-    const ids = this.store.rutas()
-      .filter(r => r.origenId === f.origenId && r.destinoId === f.destinoId && r.estado === 'ACTIVA').map(r => r.empresaId);
-    return this.store.empresas().filter(e => ids.includes(e.empresaId));
-  }
-  get vehiculosEmpresa() { return this.store.vehiculos().filter(x => x.empresaId === this.form.empresaId); }
-  get conductoresEmpresa() { return this.store.conductores().filter(c => c.empresaId === this.form.empresaId); }
-  get duracionRuta(): number | null {
-    const f = this.form;
-    const rutas = this.store.rutas().filter(r => r.origenId === f.origenId && r.destinoId === f.destinoId
-      && (!f.empresaId || r.empresaId === f.empresaId));
-    return rutas.length ? Math.min(...rutas.map(r => r.duracionEstimadaMin)) : null;
-  }
+  // Recursos del proveedor elegido (Kampu Tours u otro): vehículo y conductor deben ser del mismo
+  proveedorSel: number | null = null;
+  estimacion = signal<EstimacionDuracion | null>(null);
+  get vehiculosProveedor() { return this.store.vehiculos().filter(x => x.proveedorId === this.proveedorSel); }
+  get conductoresProveedor() { return this.store.conductores().filter(c => c.proveedorId === this.proveedorSel); }
 
-  cambioRuta() {
-    if (this.form.empresaId && !this.empresasConRuta.some(e => e.empresaId === this.form.empresaId)) this.cambioEmpresa(null);
-  }
-  cambioEmpresa(id: number | null) {
-    this.form.empresaId = id;
+  cambioRuta() { this.estimacion.set(null); }
+  cambioProveedor(id: number | null) {
+    this.proveedorSel = id;
     this.form.vehiculoId = null;
     this.form.conductorId = null;
+  }
+
+  // Duración con datos reales (OSRM / coordenadas): propone la llegada
+  calcularLlegada() {
+    const f = this.form;
+    if (!f.origenId || !f.destinoId || f.origenId === f.destinoId) { this.alerts.toast('Elige origen y destino', 'info'); return; }
+    this.store.estimarDuracion(f.origenId, f.destinoId).subscribe({
+      next: e => {
+        this.estimacion.set(e);
+        if (e.minutos && f.horaProgramadaSalida) {
+          const d = new Date(f.horaProgramadaSalida);
+          d.setMinutes(d.getMinutes() + e.minutos);
+          const p = (n: number) => String(n).padStart(2, '0');
+          this.form.horaEstimadaLlegada = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+        }
+      },
+      error: err => this.alerts.error(this.store.error(err))
+    });
   }
   cambioSalida() {
     const s = this.store.getSalida(this.form.salidaId);
@@ -156,6 +163,8 @@ export class OperacionesComponent {
 
   nueva() {
     this.editId = null;
+    this.proveedorSel = this.store.proveedores().find(p => p.esPropio)?.proveedorId ?? null;
+    this.estimacion.set(null);
     this.form = this.vacio();
     this.cambioSalida();
     this.v.reiniciar();
@@ -164,8 +173,10 @@ export class OperacionesComponent {
 
   editar(o: Operacion) {
     this.editId = o.operacionId;
+    this.proveedorSel = o.proveedorId;
+    this.estimacion.set(null);
     this.form = {
-      salidaId: o.salidaId, origenId: o.origenId, destinoId: o.destinoId, empresaId: o.empresaId, vehiculoId: o.vehiculoId,
+      salidaId: o.salidaId, origenId: o.origenId, destinoId: o.destinoId, vehiculoId: o.vehiculoId,
       conductorId: o.conductorId, paxProgramados: o.paxProgramados, horaProgramadaSalida: o.horaProgramadaSalida.slice(0, 16),
       horaEstimadaLlegada: o.horaEstimadaLlegada ? o.horaEstimadaLlegada.slice(0, 16) : null, observaciones: o.observaciones
     };
@@ -199,13 +210,13 @@ export class OperacionesComponent {
   vehiculosCand = computed(() => this.candidatos().filter(c => c.tipoRecurso === 'VEHICULO'));
   conductoresCand() {
     const v = this.vehiculosCand().find(c => c.recursoId === this.vehiculoSel);
-    return this.candidatos().filter(c => c.tipoRecurso === 'CONDUCTOR' && (!v || c.empresaId === v.empresaId));
+    return this.candidatos().filter(c => c.tipoRecurso === 'CONDUCTOR' && (!v || c.proveedorId === v.proveedorId));
   }
   elegirVehiculo(c: RecursoCandidato) {
     if (c.motivo) return;
     this.vehiculoSel = c.recursoId;
     const cond = this.candidatos().find(x => x.recursoId === this.conductorSel && x.tipoRecurso === 'CONDUCTOR');
-    if (cond && cond.empresaId !== c.empresaId) this.conductorSel = null;
+    if (cond && cond.proveedorId !== c.proveedorId) this.conductorSel = null;
   }
   elegirConductor(c: RecursoCandidato) { if (!c.motivo) this.conductorSel = c.recursoId; }
 

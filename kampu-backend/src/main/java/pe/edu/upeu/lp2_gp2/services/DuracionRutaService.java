@@ -3,7 +3,6 @@ package pe.edu.upeu.lp2_gp2.services;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.upeu.lp2_gp2.dto.EstimacionDuracionDTO;
@@ -25,24 +24,23 @@ import java.util.Locale;
  * Duración de una ruta con datos reales:
  *  1. OSRM (https://project-osrm.org): tiempo de manejo por la red vial de OpenStreetMap
  *     entre las coordenadas del origen y del destino, más un margen de embarque.
- *  2. Si OSRM no responde (sin internet) o está desactivado: PKG_RUTAS.duracion_estimada_min
- *     (distancia real en línea recta entre las coordenadas, calibrada con tiempos de viaje reales).
+ *  2. Si OSRM no responde (sin internet) o está desactivado: estimación con la distancia real en
+ *     línea recta entre las coordenadas (haversine), calibrada con tiempos de viaje reales del Perú.
+ * v4: el resultado se guarda directamente en OPERACIONES_TRANSPORTE.hora_llegada.
  * Configuración: kampu.rutas.osrm-url y kampu.rutas.osrm-habilitado (application.yaml).
  */
 @Service
 public class DuracionRutaService {
     private final LugarRepository lugarRepository;
-    private final JdbcTemplate jdbc;
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http;
     private final String osrmUrl;
     private final boolean osrmHabilitado;
 
-    public DuracionRutaService(LugarRepository lugarRepository, JdbcTemplate jdbc,
+    public DuracionRutaService(LugarRepository lugarRepository,
                                @Value("${kampu.rutas.osrm-url:https://router.project-osrm.org}") String osrmUrl,
                                @Value("${kampu.rutas.osrm-habilitado:true}") boolean osrmHabilitado) {
         this.lugarRepository = lugarRepository;
-        this.jdbc = jdbc;
         this.osrmUrl = osrmUrl.endsWith("/") ? osrmUrl.substring(0, osrmUrl.length() - 1) : osrmUrl;
         this.osrmHabilitado = osrmHabilitado;
         // ProxySelector.getDefault(): respeta https.proxyHost/https.proxyPort si la red lo necesita
@@ -68,21 +66,35 @@ public class DuracionRutaService {
         EstimacionDuracionDTO real = osrm(origen, destino, tipo);
         if (real != null) return real;
 
-        Integer minutos = jdbc.queryForObject("SELECT PKG_RUTAS.duracion_estimada_min(?, ?, ?) FROM dual",
-                Integer.class, origenId, destinoId, tipo);
-        BigDecimal km = jdbc.queryForObject("SELECT PKG_RUTAS.distancia_vial_km(?, ?, ?) FROM dual",
-                BigDecimal.class, origenId, destinoId, tipo);
+        double recta = haversineKm(origen, destino);
+        double velocidad = Math.min(VEL_MAXIMA, VEL_BASE + VEL_POR_KM * recta);
+        int minutos = (int) Math.max(5, Math.ceil((recta * FACTOR_VIAL / velocidad * 60 + margen(tipo)) / 5) * 5);
+        BigDecimal km = BigDecimal.valueOf(recta * FACTOR_VIAL).setScale(1, RoundingMode.HALF_UP);
         return new EstimacionDuracionDTO(minutos, km, "ESTIMADO",
-                "Estimación con las coordenadas reales (PKG_RUTAS): sin conexión con el servicio de rutas OSRM.");
+                "Estimación con las coordenadas reales de los lugares: sin conexión con el servicio de rutas OSRM.");
     }
 
-    /** Minutos para guardar en la ruta, o null si no se pudo calcular (lo intentará trg_ruta_biu). */
+    // Estimación sin internet: carretera = línea recta x 1.3; velocidad media 18 km/h + 0.3 x km (máx. 80)
+    private static final double FACTOR_VIAL = 1.3;
+    private static final double VEL_BASE = 18;
+    private static final double VEL_POR_KM = 0.3;
+    private static final double VEL_MAXIMA = 80;
+
+    private double haversineKm(Lugar a, Lugar b) {
+        double lat1 = Math.toRadians(a.getLatitud().doubleValue()), lat2 = Math.toRadians(b.getLatitud().doubleValue());
+        double dLat = lat2 - lat1;
+        double dLon = Math.toRadians(b.getLongitud().doubleValue() - a.getLongitud().doubleValue());
+        double h = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dLon / 2), 2);
+        return 2 * 6371 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    }
+
+    /** Minutos del trayecto, o null si faltan coordenadas. */
     public Integer minutos(Long origenId, Long destinoId, String tipoServicio) {
         if (origenId == null || destinoId == null || origenId.equals(destinoId)) return null;
         return estimar(origenId, destinoId, tipoServicio).minutos();
     }
 
-    // Embarque y desembarque que OSRM no considera (mismo margen que PKG_RUTAS)
+    // Embarque y desembarque que OSRM no considera
     private int margen(String tipo) {
         return "INTERPROVINCIAL".equals(tipo) ? 10 : 5;
     }
@@ -109,7 +121,7 @@ public class DuracionRutaService {
             Thread.currentThread().interrupt();
             return null;
         } catch (Exception e) {
-            // Sin internet, servicio caído o respuesta inesperada: se usa la estimación de PKG_RUTAS
+            // Sin internet, servicio caído o respuesta inesperada: se usa la estimación por coordenadas
             return null;
         }
     }

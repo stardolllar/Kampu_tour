@@ -14,7 +14,12 @@ export const ETIQUETAS: { [codigo: string]: string } = {
   DESCANSO: 'Descanso', VACACIONES: 'Vacaciones', INACTIVO: 'Inactivo',
   // Operaciones (DOMINIO_ESTADOS)
   PROGRAMADO: 'Programado', ASIGNADO: 'Asignado', EMBARQUE: 'Embarque', EN_ESPERA_SALIDA: 'En espera de salida',
-  EN_RUTA: 'En ruta', LLEGADA_PROXIMA: 'Llegada próxima', FINALIZADO: 'Finalizado', RETRASADO: 'Retrasado', CANCELADO: 'Cancelado'
+  EN_RUTA: 'En ruta', LLEGADA_PROXIMA: 'Llegada próxima', FINALIZADO: 'Finalizado', RETRASADO: 'Retrasado', CANCELADO: 'Cancelado',
+  // Portal del cliente (v4)
+  POR_EMPEZAR: 'Por empezar', EN_CURSO: 'En curso', TERMINADO: 'Terminado',
+  PAGADO_COMPLETO: 'Pagado completo', FALTA_PAGAR: 'Falta pagar', PENDIENTE_PAGO: 'Pendiente de pago', ANULADO: 'Anulado',
+  // Roles
+  ADMIN: 'Administrador', VENDEDOR: 'Ventas', OPERADOR: 'Operador', CLIENTE: 'Cliente'
 };
 
 export function etiqueta(codigo?: string | null): string {

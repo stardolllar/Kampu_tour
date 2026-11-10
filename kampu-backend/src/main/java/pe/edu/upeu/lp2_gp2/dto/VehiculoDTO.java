@@ -6,17 +6,16 @@ import java.time.LocalDate;
 
 public record VehiculoDTO(
         Long vehiculoId,
-        Long empresaId,
+        Long proveedorId,
         String placa,
         String tipoVehiculo,
         String marcaModelo,
         Integer capacidadPax,
-        LocalDate fechaProxMantenimiento,
-        String estadoOperativo
+        LocalDate proxMantenimiento,
+        String estado
 ) {
     public static VehiculoDTO desde(Vehiculo v) {
-        return new VehiculoDTO(v.getVehiculoId(), v.getEmpresaId(), v.getPlaca(), v.getTipoVehiculo(),
-                v.getMarcaModelo() == null ? "" : v.getMarcaModelo(), v.getCapacidadPax(), v.getFechaProxMantenimiento(),
-                v.getEstadoOperativo());
+        return new VehiculoDTO(v.getVehiculoId(), v.getProveedorId(), v.getPlaca(), v.getTipoVehiculo(),
+                v.getMarcaModelo() == null ? "" : v.getMarcaModelo(), v.getCapacidadPax(), v.getProxMantenimiento(), v.getEstado());
     }
 }

@@ -41,7 +41,7 @@
             } @empty { <dd class="font-medium">Sin operaciones</dd> }
             @if (salida()?.faltanteTransporte) { <dd class="text-xs text-amber-600 mt-1">Falta transporte para todos los pasajeros.</dd> }
           </div>
-          <div class="rounded-xl border border-zinc-100 bg-sand-50/60 px-3.5 py-2.5"><dt class="text-xs font-medium text-zinc-400 mb-0.5">Cliente</dt><dd class="font-medium">{{ nombreCliente() }}@if (invitado()) { <span class="chip ml-1.5 !font-sans" title="Reserva sin cliente registrado">Invitado</span> }</dd></div>
+          <div class="rounded-xl border border-zinc-100 bg-sand-50/60 px-3.5 py-2.5"><dt class="text-xs font-medium text-zinc-400 mb-0.5">Cliente</dt><dd class="font-medium">{{ nombreCliente() }}@if (cliente()?.cuentaWeb) { <span class="chip ml-1.5 !font-sans" title="Ve su paquete en el portal">Cuenta web</span> }</dd></div>
           <div class="rounded-xl border border-zinc-100 bg-sand-50/60 px-3.5 py-2.5"><dt class="text-xs font-medium text-zinc-400 mb-0.5">Contacto</dt><dd class="font-medium">{{ telefonoCliente() || '—' }}</dd><dd class="text-xs text-zinc-500 mt-0.5 truncate">{{ emailCliente() || 'Sin correo' }}</dd></div>
         </dl>
         @if (r.observaciones) {

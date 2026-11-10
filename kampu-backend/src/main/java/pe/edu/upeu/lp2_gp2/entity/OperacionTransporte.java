@@ -4,21 +4,17 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.DynamicUpdate;
 
-// Tráfico de transporte. trg_operacion_transporte genera el código KMP-###, calcula
-// la llegada estimada con la ruta, valida transiciones (DOMINIO_TRANSICIONES),
-// cruces de horario, descanso del conductor, mantenimiento y capacidad de la salida,
-// y registra cada cambio de estado en HISTORIAL_TRAFICO_OPERACION.
+// Tráfico: transiciones de estado y validaciones en OperacionTransporteServiceImpl
 @Entity
 @DynamicUpdate
-@Table(name = "OPERACION_TRANSPORTE")
+@Table(name = "OPERACIONES_TRANSPORTE")
 public class OperacionTransporte {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "operacion_id")
     private Long operacionId;
 
-    // Lo genera el trigger (KMP-001, KMP-002...)
-    @Column(name = "codigo_operacion", insertable = false, updatable = false)
+    @Column(name = "codigo_operacion", nullable = false, length = 20)
     private String codigoOperacion;
 
     @Column(name = "salida_id")
@@ -30,27 +26,24 @@ public class OperacionTransporte {
     @Column(name = "destino_id", nullable = false)
     private Long destinoId;
 
-    @Column(name = "empresa_id")
-    private Long empresaId;
-
     @Column(name = "vehiculo_id")
     private Long vehiculoId;
 
+    // PERSONAL con rol CONDUCTOR o AMBOS
     @Column(name = "conductor_id")
     private Long conductorId;
 
     @Column(name = "pax_programados", nullable = false)
     private Integer paxProgramados;
 
-    @Column(name = "hora_programada_salida", nullable = false)
-    private LocalDateTime horaProgramadaSalida;
+    @Column(name = "hora_salida", nullable = false)
+    private LocalDateTime horaSalida;
 
-    // Si va nula, el trigger la calcula con la duración de la ruta
-    @Column(name = "hora_estimada_llegada")
-    private LocalDateTime horaEstimadaLlegada;
+    @Column(name = "hora_llegada", nullable = false)
+    private LocalDateTime horaLlegada;
 
-    @Column(name = "estado_actual", nullable = false, length = 20)
-    private String estadoActual;
+    @Column(name = "estado", length = 20)
+    private String estado;
 
     @Column(name = "observaciones", length = 200)
     private String observaciones;
@@ -98,14 +91,6 @@ public class OperacionTransporte {
         this.destinoId = destinoId;
     }
 
-    public Long getEmpresaId() {
-        return empresaId;
-    }
-
-    public void setEmpresaId(Long empresaId) {
-        this.empresaId = empresaId;
-    }
-
     public Long getVehiculoId() {
         return vehiculoId;
     }
@@ -130,28 +115,28 @@ public class OperacionTransporte {
         this.paxProgramados = paxProgramados;
     }
 
-    public LocalDateTime getHoraProgramadaSalida() {
-        return horaProgramadaSalida;
+    public LocalDateTime getHoraSalida() {
+        return horaSalida;
     }
 
-    public void setHoraProgramadaSalida(LocalDateTime horaProgramadaSalida) {
-        this.horaProgramadaSalida = horaProgramadaSalida;
+    public void setHoraSalida(LocalDateTime horaSalida) {
+        this.horaSalida = horaSalida;
     }
 
-    public LocalDateTime getHoraEstimadaLlegada() {
-        return horaEstimadaLlegada;
+    public LocalDateTime getHoraLlegada() {
+        return horaLlegada;
     }
 
-    public void setHoraEstimadaLlegada(LocalDateTime horaEstimadaLlegada) {
-        this.horaEstimadaLlegada = horaEstimadaLlegada;
+    public void setHoraLlegada(LocalDateTime horaLlegada) {
+        this.horaLlegada = horaLlegada;
     }
 
-    public String getEstadoActual() {
-        return estadoActual;
+    public String getEstado() {
+        return estado;
     }
 
-    public void setEstadoActual(String estadoActual) {
-        this.estadoActual = estadoActual;
+    public void setEstado(String estado) {
+        this.estado = estado;
     }
 
     public String getObservaciones() {

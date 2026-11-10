@@ -13,4 +13,6 @@ public interface DetalleReservaRepository extends JpaRepository<DetalleReserva, 
     List<DetalleReserva> findByReservaIdOrderByDetalleIdAsc(Long reservaId);
 
     boolean existsBySalidaId(Long salidaId);
+
+    List<DetalleReserva> findBySalidaId(Long salidaId);
 }

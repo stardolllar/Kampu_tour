@@ -5,8 +5,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.DynamicUpdate;
 
-// Cabecera de la reserva. monto_total = SUM(DETALLE_RESERVA.subtotal), lo mantiene
-// trg_detalle_reserva_biud; al ANULAR, trg_reserva_estado_bu devuelve los cupos.
+// Cambios de estado_reserva / estado_pago quedan en AUDITORIA (TRG_AUDITORIA_ESTADO_PAQUETE)
 @Entity
 @DynamicUpdate
 @Table(name = "RESERVAS")
@@ -16,18 +15,16 @@ public class Reserva {
     @Column(name = "reserva_id")
     private Long reservaId;
 
-    // Nulo cuando la reserva es de un invitado (sin cliente registrado)
-    @Column(name = "cliente_id")
+    @Column(name = "cliente_id", nullable = false)
     private Long clienteId;
 
     @Column(name = "fecha_reserva")
     private LocalDateTime fechaReserva;
 
-    // Lo calcula el trigger del detalle: Hibernate nunca lo escribe
-    @Column(name = "monto_total", insertable = false, updatable = false)
+    @Column(name = "monto_total", nullable = false, precision = 10, scale = 2)
     private BigDecimal montoTotal;
 
-    @Column(name = "monto_pagado", precision = 10, scale = 2)
+    @Column(name = "monto_pagado", nullable = false, precision = 10, scale = 2)
     private BigDecimal montoPagado;
 
     @Column(name = "estado_reserva", length = 20)
@@ -44,16 +41,6 @@ public class Reserva {
 
     @Column(name = "usuario_anula_id")
     private Long usuarioAnulaId;
-
-    // Datos de contacto del invitado (solo si cliente_id es nulo)
-    @Column(name = "contacto_nombre", length = 150)
-    private String contactoNombre;
-
-    @Column(name = "contacto_email", length = 100)
-    private String contactoEmail;
-
-    @Column(name = "contacto_telefono", length = 20)
-    private String contactoTelefono;
 
     @Column(name = "boleta_enviada_en")
     private LocalDateTime boletaEnviadaEn;
@@ -139,30 +126,6 @@ public class Reserva {
 
     public void setUsuarioAnulaId(Long usuarioAnulaId) {
         this.usuarioAnulaId = usuarioAnulaId;
-    }
-
-    public String getContactoNombre() {
-        return contactoNombre;
-    }
-
-    public void setContactoNombre(String contactoNombre) {
-        this.contactoNombre = contactoNombre;
-    }
-
-    public String getContactoEmail() {
-        return contactoEmail;
-    }
-
-    public void setContactoEmail(String contactoEmail) {
-        this.contactoEmail = contactoEmail;
-    }
-
-    public String getContactoTelefono() {
-        return contactoTelefono;
-    }
-
-    public void setContactoTelefono(String contactoTelefono) {
-        this.contactoTelefono = contactoTelefono;
     }
 
     public LocalDateTime getBoletaEnviadaEn() {

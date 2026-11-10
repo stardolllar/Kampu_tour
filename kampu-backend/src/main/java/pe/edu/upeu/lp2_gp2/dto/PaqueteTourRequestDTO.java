@@ -26,8 +26,6 @@ public record PaqueteTourRequestDTO(
         @Size(max = 500, message = "La ruta de la imagen admite máximo 500 caracteres.")
         String imagen,
         @Pattern(regexp = "ACTIVO|INACTIVO", message = "El estado debe ser ACTIVO o INACTIVO.")
-        String estado,
-        // Lugar al que llega el paquete (opcional; necesario para crear rutas hacia el paquete)
-        Long lugarDestinoId
+        String estado
 ) {
 }

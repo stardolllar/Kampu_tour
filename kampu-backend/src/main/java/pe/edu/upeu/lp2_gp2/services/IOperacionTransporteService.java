@@ -7,13 +7,13 @@ import java.util.List;
 public interface IOperacionTransporteService {
     List<OperacionDTO> listar(Long salidaId);
     OperacionDTO buscarPorId(Long id);
-    OperacionDTO crear(OperacionRequestDTO dto, String usuario);
-    OperacionDTO actualizar(Long id, OperacionRequestDTO dto, String usuario);
-    OperacionDTO cambiarEstado(Long id, CambioEstadoRequestDTO dto, String usuario);
-    OperacionDTO asignarAutomatico(Long id, String usuario);
-    OperacionDTO asignar(Long id, AsignacionRequestDTO dto, String usuario);
+    OperacionDTO crear(OperacionRequestDTO dto);
+    OperacionDTO actualizar(Long id, OperacionRequestDTO dto);
+    OperacionDTO cambiarEstado(Long id, CambioEstadoRequestDTO dto);
+    OperacionDTO asignarAutomatico(Long id);
+    OperacionDTO asignar(Long id, AsignacionRequestDTO dto);
     List<HistorialOperacionDTO> historial(Long id);
-    List<RecursoDisponibleDTO> recursosDisponibles(Long id);
     List<RecursoCandidatoDTO> candidatos(Long id);
     List<EstadoOperacionDTO> estados();
+    EstimacionDuracionDTO estimarDuracion(Long origenId, Long destinoId);
 }
