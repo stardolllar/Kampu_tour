@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TourStore } from '../../core/services/tour-store.service';
 import { AlertService } from '../../core/services/alert.service';
-import { ClienteForm, TipoDocumento } from '../../core/models';
+import { ClienteForm, TipoDocumentoCliente } from '../../core/models';
 import { IconComponent } from '../../shared/icon.component';
 import { filtrarEscritura, filtrarPegado } from '../../core/utils/filtro';
 import { FormValidacion, V } from '../../core/utils/validacion';
@@ -21,20 +21,23 @@ export class ClientesComponent {
   store = inject(TourStore);
   private alerts = inject(AlertService);
 
-  tipos: TipoDocumento[] = ['DNI', 'CE', 'PASAPORTE'];
+  tipos: TipoDocumentoCliente[] = ['DNI', 'CE', 'PASAPORTE', 'RUC'];
   texto = signal('');
   abierto = signal(false);
   editId: number | null = null;
   form: ClienteForm = this.vacio();
   v = new FormValidacion(() => ({
-    nombre: V.nombrePersona(this.form.nombreCompleto),
+    // Con RUC el nombre es una razón social (admite números y signos)
+    nombre: this.form.tipoDocumento === 'RUC'
+      ? V.texto(this.form.nombreCompleto, 'La razón social', 150, true)
+      : V.nombrePersona(this.form.nombreCompleto),
     documento: V.documento(this.form.tipoDocumento, this.form.numeroDocumento),
     email: this.form.email.trim() ? V.email(this.form.email) : 'El correo es obligatorio.',
     telefono: errorTelefonoPais(this.form.telefono)
   }));
 
   private vacio(): ClienteForm {
-    return { nombreCompleto: '', tipoDocumento: 'DNI' as TipoDocumento, numeroDocumento: '', email: '', telefono: '' };
+    return { nombreCompleto: '', tipoDocumento: 'DNI' as TipoDocumentoCliente, numeroDocumento: '', email: '', telefono: '' };
   }
 
   filas = computed(() => {

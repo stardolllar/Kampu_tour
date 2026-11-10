@@ -125,6 +125,8 @@ export class ReservaNuevaComponent implements OnInit {
     if (this.modo === 'registrado') {
       const c = this.cliente;
       if (!c) return;
+      // Un cliente con RUC es una empresa: no viaja como pasajero
+      if (c.tipoDocumento === 'RUC') { this.alerts.toast('El cliente es una empresa (RUC): agrega a los pasajeros uno por uno', 'info'); return; }
       dato = { nombreCompleto: c.nombreCompleto, tipoDocumento: c.tipoDocumento, numeroDocumento: c.numeroDocumento,
                nacionalidad: 'Peruana', fechaNacimiento: '' };
     } else {

@@ -11,6 +11,7 @@ import { PaquetesComponent } from './features/paquetes/paquetes.component';
 import { PagosComponent } from './features/pagos/pagos.component';
 import { ClientesComponent } from './features/clientes/clientes.component';
 import { RecursosComponent } from './features/recursos/recursos.component';
+import { OperacionesComponent } from './features/operaciones/operaciones.component';
 
 export const routes: Routes = [
   { path: '', component: LandingComponent, pathMatch: 'full' },
@@ -27,6 +28,7 @@ export const routes: Routes = [
       { path: 'paquetes', component: PaquetesComponent },
       { path: 'pagos', component: PagosComponent },
       { path: 'clientes', component: ClientesComponent },
+      { path: 'operaciones', component: OperacionesComponent },
       { path: 'recursos', component: RecursosComponent }
     ]
   },

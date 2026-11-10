@@ -1,15 +1,75 @@
-# KAMPU · Tour Manager — sistema integrado (Angular + Spring Boot + Oracle)
+# KAMPU · Tour Manager v3 — sistema integrado (Angular + Spring Boot + Oracle)
 
 ```
 proyecto/
 ├── kampu-backend/      Backend Spring Boot 3.4 (Java 21) — API REST en http://localhost:8082/lp2_gp2
 │   └── src/main/resources/db/
-│       ├── 01_schema.sql   Script de tablas (el original; un solo ajuste, ver "Hallazgos")
-│       ├── 02_data.sql     Datos de demostración (los mismos que tenía el frontend en seed.ts)
-│       ├── 03_migracion_choferes_invitados.sql  Solo para una BD ya creada: choferes, invitados y boleta
-│       └── 04_migracion_telefono_pais.sql       Solo para una BD ya creada: teléfono con código de país
-└── kampu-frontend/     Frontend Angular 18 (el diseño y las pantallas no cambian)
+│       ├── 00_reset.sql      Solo si ya tenías una base creada: borra el esquema anterior y el v3
+│       ├── 01_schema_v3.sql  Script v3: tablas, PKG_ASIGNACION (PL/SQL), vistas y triggers
+│       └── 02_data.sql       Datos de demostración (se cargan pasando por los triggers v3)
+└── kampu-frontend/     Frontend Angular 18
 ```
+
+## Versión 3 (Kampu Tour Manager v3)
+
+El proyecto quedó adaptado al script `kampu_tour_manager_v3.sql`. La lógica de negocio pesada vive ahora en
+**Oracle** (PL/SQL, triggers y vistas) y el backend la usa en vez de repetirla en Java:
+
+| Antes | v3 |
+|---|---|
+| `TRANSPORTE`, `CHOFERES` | `EMPRESA_TRANSPORTE` (proveedores afiliados), `VEHICULO` y `CONDUCTOR` (de una empresa), `LUGARES`, `RUTAS_PROVEEDOR` |
+| Vehículo y chofer en `SALIDAS_PROGRAMADAS` | `OPERACION_TRANSPORTE`: cada tramo de la salida (aeropuerto → hotel, hotel → atractivo…) con su empresa, vehículo, conductor y estado |
+| `RESERVAS.salida_id` / `numero_viajeros` | `DETALLE_RESERVA` (una línea por salida) y los pasajeros cuelgan del detalle |
+| Cupos y montos calculados en Java | Triggers: cupos, precio congelado y `monto_total`; la anulación devuelve los cupos |
+| — | `HISTORIAL_TRAFICO_OPERACION`, catálogo `DOMINIO_ESTADOS` / `DOMINIO_TRANSICIONES` |
+| Roles `ADMIN`, `VENTAS` | `ADMIN`, `VENDEDOR`, `OPERADOR` (`chk_usu_rol`) |
+| Pagos solo con moneda | `tipo_cambio` y `monto_pen` (columna virtual) |
+| Clientes DNI/CE/PASAPORTE | también **RUC** (empresas); documento único por tipo |
+
+### Dónde usa el backend cada objeto PL/SQL
+
+| Objeto de la base de datos | Qué hace | Lo usa |
+|---|---|---|
+| `PKG_ASIGNACION.asignar_automatico` | Elige vehículo + conductor de una misma empresa y deja la operación ASIGNADA | `POST /operaciones/{id}/asignar-automatico` (`PkgAsignacionRepository`) |
+| `PKG_ASIGNACION.motivo_vehiculo` / `motivo_conductor` / `horas_conductor_dia` | Por qué un recurso no es elegible (cruce, mantenimiento, licencia, 10 h/día…) | `GET /operaciones/{id}/candidatos` (pantalla *Asignar*) |
+| `PKG_ASIGNACION.faltante_transporte` | Tramo de la salida cuyo transporte no alcanza | `faltanteTransporte` de `GET /salidas` |
+| `VW_RECURSOS_DISPONIBLES` | Recursos elegibles para una operación PROGRAMADA | `GET /operaciones/{id}/recursos-disponibles` |
+| `VW_TABLERO_OPERACIONES` | Tablero con nombres, horas reales y minutos de retraso | `GET /operaciones` (entidad `VistaTableroOperacion`) |
+| `VW_EMPRESA_CAPACIDAD` | Capacidad total, vehículos y conductores disponibles por empresa | `GET /empresas` (entidad `VistaEmpresaCapacidad`) |
+| `V_RESERVAS_RESUMEN` | Número de viajeros y saldo de cada reserva | `GET /reservas` (entidad `VistaReservaResumen`) |
+| `trg_salida_biu` | Calcula `fecha_fin` y `cupos_disponibles` | Crear/editar salidas (el backend envía `fecha_fin` nula y relee la fila) |
+| `trg_salida_confirmar` | Solo confirma una salida con transporte suficiente | `PUT /salidas/{id}` con estado CONFIRMADA |
+| `trg_detalle_reserva_biud` | Valida salida y cupos, congela el precio, suma `monto_total` y controla el transporte de salidas confirmadas | `POST /reservas` |
+| `trg_pasajeros_cupo` | No más pasajeros que la cantidad del detalle | `POST /reservas` |
+| `trg_reserva_estado_bu` | Al anular devuelve los cupos; una anulada no se reactiva | `PATCH /reservas/{id}/anular` |
+| `trg_operacion_transporte` | Código `KMP-###`, llegada estimada, transiciones, recursos obligatorios, ruta activa, cruces, descanso, mantenimiento, capacidad e historial | `POST/PUT /operaciones`, `PATCH /operaciones/{id}/estado`, `PATCH /operaciones/{id}/asignar` |
+
+- Los mensajes de `RAISE_APPLICATION_ERROR` (ORA-20xxx) llegan tal cual al usuario (respuesta 400), y las restricciones
+  UNIQUE/CHECK/FK se traducen por nombre (`exception/ErroresOracle.java`). Ejemplo:
+  `KMP-008 - vehículo: capacidad insuficiente (4 < 10 pax)`.
+- Las columnas que mantienen los triggers (`cupos_disponibles`, `monto_total`, `codigo_operacion`, `subtotal`, `monto_pen`)
+  están mapeadas con `insertable = false, updatable = false`, y las entidades usan `@DynamicUpdate` para que los triggers
+  `UPDATE OF ...` solo se disparen con las columnas que realmente cambian.
+- El historial de tráfico guarda quién hizo cada cambio: el frontend envía el encabezado `X-Usuario` y el backend lo pone
+  en `DBMS_SESSION.SET_IDENTIFIER` (el trigger lee `USERENV.CLIENT_IDENTIFIER`).
+- Todas las entidades y vistas se verificaron contra el esquema v3 con `spring.jpa.hibernate.ddl-auto=validate`.
+
+### Ajuste al script v3
+
+Una sola línea de `01_schema_v3.sql` cambia respecto al archivo original: en
+`INSERT INTO DOMINIO_TRANSICIONES VALUES ('ASIGNADO', 'PROGRAMADO');   -- desasignar` el comentario va ahora en su propia
+línea. En **SQL*Plus**, un comentario después del `;` hace que la sentencia se una con la siguiente y **fallan las dos**
+(se perdían las transiciones ASIGNADO → PROGRAMADO y ASIGNADO → EMBARQUE). En SQL Developer (F5) no pasaba.
+
+### Pantallas nuevas o cambiadas (frontend)
+
+- **Tráfico** (`/operaciones`): tablero de operaciones con filtros, asignación automática (`PKG_ASIGNACION`) o manual
+  (con el motivo de cada recurso no elegible), cambio de estado según las transiciones permitidas, historial y observaciones.
+- **Logística** (`/recursos`): Guías, Empresas (con capacidad de la vista), Vehículos, Conductores, Lugares y Rutas.
+- **Salidas**: la fecha fin la calcula la base de datos; la columna Transporte muestra las operaciones de la salida y si
+  falta capacidad (`faltante_transporte`). Vehículo y chofer ya no se eligen aquí.
+- **Reserva**: muestra las operaciones de su salida, el precio por persona y el descuento del detalle.
+- **Clientes**: admite RUC (razón social). Login: nueva cuenta demo `operador`.
 
 ## Rediseño visual del frontend (UI/UX)
 
@@ -36,10 +96,10 @@ Las mismas reglas se aplican en ambos lados: `kampu-frontend/src/app/core/utils/
 | Campo | Regla |
 |---|---|
 | Nombres de personas (cliente, guía, pasajero) | Letras (con tildes y ñ), espacios y `. ' -` |
-| DNI / CE / Pasaporte | DNI: 8 dígitos · CE: 8 a 12 letras o números · Pasaporte: 6 a 12 letras o números |
+| DNI / CE / Pasaporte / RUC | DNI: 8 dígitos · CE: 8 a 12 letras o números · Pasaporte: 6 a 12 letras o números · RUC (solo clientes y empresas): 11 dígitos que empiezan con 10, 15, 17 o 20 |
 | Teléfono (opcional) | Números con `+ ( ) -`, entre 6 y 15 dígitos |
 | Correo (opcional) | Formato `nombre@dominio.com` |
-| Placa | Letras, números y guion (3 a 15) |
+| Placa | Letras, números y guion (3 a 10, `VEHICULO.placa` es `VARCHAR2(10)`) |
 | Días / noches / cupos / capacidad | Enteros: 1–99 / 0–99 (y noches ≤ días) / 1–999 / 1–999 |
 | Precio base / monto | Mayor a 0, máximo 2 decimales (cabe en `NUMBER(10,2)`); el pago aprobado no puede exceder el saldo |
 | Fecha de nacimiento (opcional) | Anterior a hoy y desde 1900 |
@@ -48,29 +108,32 @@ Las mismas reglas se aplican en ambos lados: `kampu-frontend/src/app/core/utils/
   (por ejemplo letras o la "e" en campos numéricos) y los mensajes aparecen debajo de cada campo.
 - En el backend, Bean Validation rechaza los datos con estado 400 y un mensaje claro; si llega un tipo incorrecto
   (letras o decimales en un campo entero, fechas mal escritas) se indica qué campo falló.
-- La base de datos no necesitó cambios: los tipos y longitudes de `01_schema.sql` coinciden con estas reglas.
+- Los tipos y longitudes coinciden con `01_schema_v3.sql`; las reglas que dependen de otros datos (cupos, cruces de
+  horario, transiciones, capacidad) las valida la base de datos con sus triggers.
 
-## 1. Base de datos (Oracle)
+## 1. Base de datos (Oracle 12c o superior)
 
 1. Crea (o usa) el usuario dueño del esquema. Por defecto el backend usa `LP2` / `admin123` en `localhost:1522/XE`.
+   Necesita poder crear tablas, secuencias, vistas, paquetes y triggers (`CREATE PROCEDURE`, `CREATE TRIGGER`, `CREATE VIEW`).
 2. Conectado como ese usuario (SQL Developer o SQL*Plus), ejecuta **en orden**:
-   1. `kampu-backend/src/main/resources/db/01_schema.sql`
-   2. `kampu-backend/src/main/resources/db/02_data.sql` (opcional, carga los datos demo y hace `COMMIT`)
+   1. `kampu-backend/src/main/resources/db/00_reset.sql` — **solo si ya tenías la base de la versión anterior**
+      (tablas `TRANSPORTE`/`CHOFERES`) o una instalación previa de la v3. **Borra todos los datos.**
+   2. `kampu-backend/src/main/resources/db/01_schema_v3.sql` — tablas, índices, `PKG_ASIGNACION`, vistas y triggers.
+      Al final lista los objetos: todos deben salir `VALID`.
+   3. `kampu-backend/src/main/resources/db/02_data.sql` (opcional) — datos demo: 4 empresas, 13 lugares, 11 rutas,
+      8 vehículos, 7 conductores, 9 salidas, 8 reservas y 9 operaciones de transporte con su historial.
 
-   En SQL Developer usa **"Ejecutar script" (F5)**, no "Ejecutar sentencia" (el trigger termina en `/`).
+   En SQL Developer usa **"Ejecutar script" (F5)**, no "Ejecutar sentencia" (el paquete y los triggers terminan en `/`).
    En SQL*Plus, para que las tildes se guarden bien: `set NLS_LANG=AMERICAN_AMERICA.AL32UTF8` antes de entrar.
-3. Si no cargas `02_data.sql`, al iniciar el backend se crean solos los usuarios `admin` y `ventas` (si la tabla está vacía).
+3. Si no cargas `02_data.sql`, al iniciar el backend se crean solos los usuarios `admin` (ADMIN), `ventas` (VENDEDOR)
+   y `operador` (OPERADOR) si la tabla está vacía.
+
+> Ya no hay scripts de migración: la v3 cambia la estructura de reservas y transporte, así que se reinstala con
+> `00_reset.sql` → `01_schema_v3.sql` → `02_data.sql`. Si necesitas conservar datos reales, expórtalos antes.
 
 > `02_data.sql` usa IDs fijos (para que coincidan las relaciones) y al final reinicia las identidades con
 > `ALTER TABLE ... MODIFY ... (START WITH LIMIT VALUE)`, para que los registros nuevos continúen desde el último ID.
-
-**¿Ya tenías la base creada?** Ejecuta solo `03_migracion_choferes_invitados.sql`: crea `CHOFERES`, agrega
-`chofer_id` a las salidas, permite reservas sin cliente (`contacto_nombre/email/telefono`) y la columna
-`boleta_enviada_en`. Si instalas desde cero no hace falta: `01` y `02` ya incluyen esos cambios.
-
-Después ejecuta `04_migracion_telefono_pais.sql`: pasa los teléfonos al formato con código de país
-(`+51 987654321`; los que no tienen código se toman como Perú) y vuelve obligatorios el correo y el teléfono
-de `CLIENTES`. Antes del `ALTER` final, revisa que la consulta del script no devuelva filas.
+> Las fechas de la demo son de octubre a diciembre de 2026: si ya pasaron, crea salidas nuevas para reservar.
 
 ### Correo (boleta informativa)
 
@@ -116,7 +179,7 @@ npm install
 npm start
 ```
 
-Abre http://localhost:4200 → usuario `admin` / `admin123` (o `ventas` / `ventas123`).
+Abre http://localhost:4200 → usuario `admin` / `admin123` (o `ventas` / `ventas123`, `operador` / `operador123`).
 
 `npm start` usa `proxy.config.json` (ya existía): `/api` → `http://localhost:8082/lp2_gp2/api` y
 `/lp2_gp2/images` → `http://localhost:8082`. Por eso el frontend llama a rutas relativas y no hay problemas de CORS.
@@ -133,37 +196,49 @@ Errores: `{ "status": 400, "error": "mensaje", "timestamp": ... }`
 | Usuarios | `GET /usuarios` (sin `password_hash`) |
 | Paquetes | `GET/POST /paquetes` · `GET/PUT/DELETE /paquetes/{id}` · `POST /paquetes/imagen` (multipart `file`) → `{imagen}` |
 | Guías | `GET/POST /guias` · `GET/PUT/DELETE /guias/{id}` |
-| Transporte | `GET/POST /transportes` · `GET/PUT/DELETE /transportes/{id}` |
-| Choferes | `GET/POST /choferes` · `GET/PUT/DELETE /choferes/{id}` (vehículo habitual opcional) |
+| Empresas de transporte | `GET/POST /empresas` · `GET/PUT/DELETE /empresas/{id}` (incluye `totalVehiculos`, `capacidadTotalTransporte`, `conductoresDisponibles` de `VW_EMPRESA_CAPACIDAD`) |
+| Lugares | `GET/POST /lugares` · `GET/PUT/DELETE /lugares/{id}` |
+| Rutas | `GET/POST /rutas` · `GET/PUT/DELETE /rutas/{id}` |
+| Vehículos | `GET/POST /vehiculos` · `GET/PUT/DELETE /vehiculos/{id}` |
+| Conductores | `GET/POST /conductores` · `GET/PUT/DELETE /conductores/{id}` |
+| Operaciones (tráfico) | `GET /operaciones[?salidaId=]` · `GET /operaciones/estados` (estados y transiciones) · `GET/POST /operaciones` · `GET/PUT /operaciones/{id}` · `PATCH /operaciones/{id}/estado` `{estado, observacion}` · `POST /operaciones/{id}/asignar-automatico` · `PATCH /operaciones/{id}/asignar` `{vehiculoId, conductorId}` · `GET /operaciones/{id}/candidatos` · `GET /operaciones/{id}/recursos-disponibles` · `GET /operaciones/{id}/historial`. Encabezado opcional `X-Usuario`. |
 | Clientes | `GET/POST /clientes` · `GET/PUT/DELETE /clientes/{id}` · `GET /clientes/buscar?q=` (autocompletado: nombre, documento o correo; máx. 8) |
-| Salidas | `GET/POST /salidas` · `GET/PUT/DELETE /salidas/{id}` (incluye `guiaId`, `transporteId`, `choferId`) |
-| Reservas | `GET/POST /reservas` (POST incluye `pasajeros[]` y `clienteId` **o** `contacto {nombre, email, telefono}` para invitados) · `GET /reservas/{id}/boleta` (HTML) · `POST /reservas/{id}/boleta` (envía por correo) · `GET /reservas/{id}` · `GET /reservas/{id}/pasajeros` · `PATCH /reservas/{id}/confirmar` · `PATCH /reservas/{id}/completar` · `PATCH /reservas/{id}/anular` `{formaReembolso, usuarioId}` |
+| Salidas | `GET/POST /salidas` · `GET/PUT/DELETE /salidas/{id}` (sin `fechaFin` en el cuerpo: la calcula el trigger; devuelve `operaciones` y `faltanteTransporte`) |
+| Reservas | `GET/POST /reservas` (POST incluye `salidaId`, `pasajeros[]` y `clienteId` **o** `contacto {nombre, email, telefono}` para invitados) · `GET /reservas/{id}/boleta` (HTML) · `POST /reservas/{id}/boleta` (envía por correo) · `GET /reservas/{id}` · `GET /reservas/{id}/pasajeros` · `PATCH /reservas/{id}/confirmar` · `PATCH /reservas/{id}/completar` · `PATCH /reservas/{id}/anular` `{formaReembolso, usuarioId}` (obligatorio) |
 | Pasajeros | `GET /pasajeros[?reservaId=]` |
-| Pagos | `GET /pagos[?reservaId=]` · `POST /pagos` · `PATCH /pagos/{id}/resolver` `{estado: APROBADO\|RECHAZADO}` |
+| Pagos | `GET /pagos[?reservaId=]` · `POST /pagos` · `PATCH /pagos/{id}/resolver` `{estado: APROBADO\|RECHAZADO}` (devuelven `tipoCambio` y `montoPen`) |
 
-Reglas que aplica el backend (las mismas que tenía el frontend en `TourStore`):
-reservar descuenta `cupos_disponibles` y anular los libera (con bloqueo `SELECT ... FOR UPDATE` para evitar sobreventa);
-`monto_pagado` = suma de pagos APROBADOS convertidos a PEN y `estado_pago` se deriva (PENDIENTE/PARCIAL/PAGADO);
+Reglas que aplica el **backend** (además de las de la base de datos, ver "Versión 3"):
+`monto_pagado` = suma de `PAGOS.monto_pen` APROBADOS y `estado_pago` se deriva (PENDIENTE/PARCIAL/PAGADO);
 un pago aprobado no puede exceder el saldo; anular con dinero pagado exige `forma_reembolso`, marca los pagos como
-REEMBOLSADO y guarda `usuario_anula_id` (el usuario logueado que envía el frontend); fecha fin ≥ inicio; cupos ≤ capacidad
-del transporte; sin cruce de guía/transporte en fechas; documento único por reserva; fecha de nacimiento < hoy;
-no se eliminan registros en uso (cliente con reservas, paquete/guía/transporte con salidas, salida con reservas).
+REEMBOLSADO y guarda `usuario_anula_id` (el usuario logueado que envía el frontend); no se reserva una salida que ya
+inició; sin cruce de guía en fechas; documento único por reserva; fecha de nacimiento < hoy; vehículo y conductor se
+asignan juntos; no se eliminan registros en uso (cliente con reservas, paquete/guía con salidas, salida con reservas u
+operaciones, empresa con flota/rutas/operaciones, vehículo/conductor/ruta/lugar con operaciones).
+La aplicación registra **una salida por reserva** (un `DETALLE_RESERVA`); el esquema admite varias.
 
 ## 5. Compatibilidad verificada
 
 | Elemento | Frontend | Backend | Base de datos |
 |---|---|---|---|
-| Tablas | `core/models.ts` (9 interfaces) | 9 entidades `@Table` con el nombre exacto | 9 tablas del script |
+| Tablas y vistas | `core/models.ts` | 17 entidades `@Table` + 3 vistas `@Immutable` (validadas con `ddl-auto=validate`) | 17 tablas y 4 vistas de `01_schema_v3.sql` |
 | Columnas | camelCase (`fechaInicio`) | `@Column(name="fecha_inicio")` | snake_case |
 | Fechas `DATE` | `'yyyy-MM-dd'` | `LocalDate` | `DATE` |
 | `TIMESTAMP` | string ISO | `LocalDateTime` | `TIMESTAMP` |
 | Montos | `number` | `BigDecimal` (10,2) | `NUMBER(10,2)` |
-| Estados / monedas / tipo doc. | tipos unión TS | `@Pattern` con los mismos valores | `CHECK ... IN (...)` |
+| Estados / monedas / tipo doc. | tipos unión TS | `@Pattern` con los mismos valores | `CHECK ... IN (...)` y `DOMINIO_ESTADOS` |
+| `DATE` con hora (operaciones) | `'yyyy-MM-ddTHH:mm'` | `LocalDateTime` | `DATE` |
 | Longitudes | `maxlength` en los formularios | `@Size` | `VARCHAR2(n)` |
 | Opcionales vacíos | `''` | `''` ↔ `NULL` (Oracle guarda `''` como NULL) | columnas sin `NOT NULL` |
 | Tipos de cambio | `core/utils/moneda.ts` (`TASAS`) | constantes en `ConversorMoneda.java` | — (deben coincidir) |
 
 ## 6. Hallazgos y cómo se resolvieron
+
+0. **v3 (este cambio):** ver la sección "Versión 3" (ajuste de SQL*Plus en `01_schema_v3.sql`, roles `VENDEDOR`/`OPERADOR`,
+   `fecha_fin` calculada por trigger). El `application.yaml` ahora sí lee `DB_URL`, `DB_USERNAME` y `DB_PASSWORD`
+   (la tabla de la sección 2 ya los mencionaba pero el archivo tenía los valores fijos).
+
+Historial de versiones anteriores:
 
 1. **El ZIP del backend era otra aplicación.** Contenía una plantilla de e-commerce (`producto`, `pedidos`, `persona`,
    `usuario`) sin relación con el script ni con el frontend, y con `ddl-auto: update` (habría creado esas tablas en tu esquema).
@@ -171,8 +246,8 @@ no se eliminan registros en uso (cliente con reservas, paquete/guía/transporte 
    estructura `controller/services/repository/entity/dto/exception/config`, puerto 8082, context-path `/lp2_gp2`,
    Swagger, CORS y el servicio de imágenes. El ZIP también traía el frontend antiguo de e-commerce; aquí se usa el nuevo.
 2. **El script no se ejecuta en Oracle tal cual.** `CONSTRAINT chk_pas_fecha_nac CHECK (fecha_nacimiento < SYSDATE)`
-   produce **ORA-02436** (Oracle no permite `SYSDATE` en un CHECK). Es el único cambio en `01_schema.sql`: esa línea queda
-   comentada y la misma regla se aplica con el trigger `TRG_PAS_FECHA_NAC` (y también en el backend).
+   produce **ORA-02436** (Oracle no permite `SYSDATE` en un CHECK). Era el único cambio en el `01_schema.sql` anterior: esa línea quedaba
+   comentada y la regla se aplicaba con el trigger `TRG_PAS_FECHA_NAC`. En la v3 ese trigger no existe: la valida el backend.
 3. **El frontend no tenía backend** (guardaba todo en `localStorage`). Cambios en el frontend, sin tocar HTML ni CSS:
    - `TourStore` ahora llama a la API (signals con los datos; las escrituras devuelven el `Observable` de `HttpClient`).
    - `AuthService` hace login contra el backend y guarda el usuario en `localStorage`.
@@ -184,8 +259,11 @@ no se eliminan registros en uso (cliente con reservas, paquete/guía/transporte 
 
 ## 7. Pendientes / decisiones a confirmar
 
-- **Roles:** `ADMIN` y `VENTAS` tienen hoy los mismos permisos (el frontend no los diferencia). Si se necesita, se puede
-  restringir por rol en el backend (por ejemplo, que solo `ADMIN` elimine o anule).
+- **Roles:** `ADMIN`, `VENDEDOR` y `OPERADOR` tienen hoy los mismos permisos (el frontend no los diferencia). Si se
+  necesita, se puede restringir por rol (por ejemplo, que solo `OPERADOR`/`ADMIN` cambien estados de tráfico).
+- **Parámetros de asignación:** el tope de 10 h de conducción por día y el margen de 30 min entre servicios están en las
+  constantes `c_max_horas_dia` y `c_margen_min` de `PKG_ASIGNACION` (ajústalas a la norma MTC).
+- **Detalle múltiple:** el esquema permite varias salidas por reserva; la pantalla de nueva reserva crea una sola.
 - **Tipos de cambio fijos:** `TASAS` (frontend) y `ConversorMoneda` (backend) deben mantenerse iguales.
 - **Producción:** `ng build` genera archivos estáticos que llaman a `/api/v1` y `/lp2_gp2/images` en el mismo origen;
   hay que servirlos detrás de un proxy (Nginx/Apache) que redirija esas rutas al backend.

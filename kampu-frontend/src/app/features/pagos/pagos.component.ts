@@ -31,7 +31,7 @@ export class PagosComponent {
         pago: p,
         codigo: this.store.codigoReserva(p.reservaId),
         cliente: this.store.nombreCliente(this.store.getReserva(p.reservaId)) || '—',
-        pen: aPEN(p.monto, p.moneda)
+        pen: p.montoPen ?? aPEN(p.monto, p.moneda)   // PAGOS.monto_pen (columna virtual)
       }))
       .filter(f => !e || f.pago.estadoTransaccion === e)
       .filter(f => !t || f.codigo.toLowerCase().includes(t) || f.cliente.toLowerCase().includes(t)

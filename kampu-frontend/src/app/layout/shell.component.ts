@@ -28,7 +28,8 @@ export class ShellComponent {
     { ruta: '/paquetes', texto: 'Paquetes', icono: 'package' },
     { ruta: '/pagos', texto: 'Pagos', icono: 'card' },
     { ruta: '/clientes', texto: 'Clientes', icono: 'users' },
-    { ruta: '/recursos', texto: 'Logística', icono: 'truck' }
+    { ruta: '/operaciones', texto: 'Tráfico', icono: 'truck' },
+    { ruta: '/recursos', texto: 'Logística', icono: 'map-pin' }
   ] as { ruta: string; texto: string; icono: string; exact?: boolean }[];
 
   pendientes = computed(() => this.store.reservas().filter(r => r.estadoReserva === 'PENDIENTE').length);

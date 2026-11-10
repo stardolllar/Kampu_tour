@@ -46,8 +46,11 @@ export class ReservaDetalleComponent {
   salida = computed(() => this.store.getSalida(this.reserva()?.salidaId));
   paquete = computed(() => this.store.getPaquete(this.salida()?.paqueteId));
   guia = computed(() => this.store.getGuia(this.salida()?.guiaId));
-  transporte = computed(() => this.store.getTransporte(this.salida()?.transporteId));
-  chofer = computed(() => this.store.getChofer(this.salida()?.choferId));
+  // Transporte de la salida: sus operaciones (tramos) vigentes
+  operaciones = computed(() => {
+    const s = this.salida();
+    return s ? this.store.operacionesDe(s.salidaId).filter(o => o.estadoActual !== 'CANCELADO') : [];
+  });
   cliente = computed(() => this.store.getCliente(this.reserva()?.clienteId));
   invitado = computed(() => this.store.esInvitado(this.reserva()));
   nombreCliente = computed(() => this.store.nombreCliente(this.reserva()));
